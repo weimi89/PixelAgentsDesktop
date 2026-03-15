@@ -1,0 +1,294 @@
+import { useState, useRef, useCallback, useEffect } from "react";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { useFilteredLogs, useLogStore, type LogLevel, type LogEntry } from "../stores/logStore";
+import { useAgentStore } from "../stores/agentStore";
+
+const LEVEL_COLORS: Record<LogLevel, string> = {
+  info: "#89b4fa",
+  warn: "#fab387",
+  error: "#f38ba8",
+  debug: "#6c7086",
+};
+
+function formatTimestamp(ts: number): string {
+  const d = new Date(ts);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+  const ms = String(d.getMilliseconds()).padStart(3, "0");
+  return `${hh}:${mm}:${ss}.${ms}`;
+}
+
+const styles = {
+  container: {
+    display: "flex",
+    flexDirection: "column" as const,
+    height: "100%",
+    fontFamily: "monospace",
+    fontSize: "12px",
+    color: "#cdd6f4",
+  },
+  filterBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "8px",
+    background: "#313244",
+    borderBottom: "2px solid #45475a",
+    flexWrap: "wrap" as const,
+    flexShrink: 0,
+  },
+  select: {
+    background: "#1e1e2e",
+    color: "#cdd6f4",
+    border: "2px solid #45475a",
+    borderRadius: 0,
+    padding: "4px 8px",
+    fontFamily: "monospace",
+    fontSize: "12px",
+    cursor: "pointer",
+  },
+  input: {
+    background: "#1e1e2e",
+    color: "#cdd6f4",
+    border: "2px solid #45475a",
+    borderRadius: 0,
+    padding: "4px 8px",
+    fontFamily: "monospace",
+    fontSize: "12px",
+    width: "120px",
+  },
+  button: {
+    background: "#1e1e2e",
+    color: "#cdd6f4",
+    border: "2px solid #45475a",
+    borderRadius: 0,
+    padding: "4px 10px",
+    fontFamily: "monospace",
+    fontSize: "12px",
+    cursor: "pointer",
+  },
+  buttonDanger: {
+    background: "#1e1e2e",
+    color: "#f38ba8",
+    border: "2px solid #f38ba8",
+    borderRadius: 0,
+    padding: "4px 10px",
+    fontFamily: "monospace",
+    fontSize: "12px",
+    cursor: "pointer",
+  },
+  listContainer: {
+    flex: 1,
+    minHeight: 0,
+  },
+  logRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "2px 8px",
+    height: "24px",
+    lineHeight: "24px",
+    whiteSpace: "nowrap" as const,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    borderBottom: "1px solid #181825",
+  },
+  timestamp: {
+    color: "#6c7086",
+    flexShrink: 0,
+  },
+  badge: (level: LogLevel) => ({
+    display: "inline-block",
+    padding: "0 6px",
+    color: "#1e1e2e",
+    background: LEVEL_COLORS[level],
+    fontWeight: 700,
+    fontSize: "10px",
+    textTransform: "uppercase" as const,
+    flexShrink: 0,
+    minWidth: "40px",
+    textAlign: "center" as const,
+  }),
+  source: {
+    color: "#a6adc8",
+    flexShrink: 0,
+    maxWidth: "120px",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  message: {
+    color: "#cdd6f4",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    flex: 1,
+  },
+  scrollButton: {
+    position: "absolute" as const,
+    bottom: "12px",
+    right: "20px",
+    background: "#313244",
+    color: "#89b4fa",
+    border: "2px solid #89b4fa",
+    borderRadius: 0,
+    padding: "4px 12px",
+    fontFamily: "monospace",
+    fontSize: "11px",
+    cursor: "pointer",
+    zIndex: 10,
+  },
+  empty: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    height: "100%",
+    color: "#6c7086",
+    fontSize: "13px",
+    fontFamily: "monospace",
+  },
+  filterLabel: {
+    color: "#6c7086",
+    fontSize: "11px",
+  },
+  spacer: {
+    flex: 1,
+  },
+} as const;
+
+function LogRow({ entry }: { entry: LogEntry }) {
+  return (
+    <div style={styles.logRow}>
+      <span style={styles.timestamp}>{formatTimestamp(entry.timestamp)}</span>
+      <span style={styles.badge(entry.level)}>{entry.level}</span>
+      <span style={styles.source}>[{entry.source}]</span>
+      <span style={styles.message}>{entry.message}</span>
+    </div>
+  );
+}
+
+export function LogViewer() {
+  const [levelFilter, setLevelFilter] = useState<LogLevel | "">("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [agentFilter, setAgentFilter] = useState("");
+  const [atBottom, setAtBottom] = useState(true);
+
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const clearLogs = useLogStore((s) => s.clearLogs);
+  const agents = useAgentStore((s) => s.agents);
+
+  const filteredLogs = useFilteredLogs({
+    level: levelFilter || undefined,
+    source: sourceFilter || undefined,
+    agentSessionId: agentFilter || undefined,
+  });
+
+  const agentList = Array.from(agents.values());
+
+  const scrollToBottom = useCallback(() => {
+    virtuosoRef.current?.scrollToIndex({
+      index: "LAST",
+      behavior: "smooth",
+    });
+  }, []);
+
+  // Auto-scroll when new logs arrive and user is at bottom
+  useEffect(() => {
+    if (atBottom && filteredLogs.length > 0) {
+      virtuosoRef.current?.scrollToIndex({ index: "LAST" });
+    }
+  }, [filteredLogs.length, atBottom]);
+
+  const handleExport = useCallback(() => {
+    const logs = useLogStore.getState().logs;
+    const blob = new Blob([JSON.stringify(logs, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pixel-agents-logs-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const handleClearFilters = useCallback(() => {
+    setLevelFilter("");
+    setSourceFilter("");
+    setAgentFilter("");
+  }, []);
+
+  return (
+    <div style={styles.container}>
+      <div style={styles.filterBar}>
+        <span style={styles.filterLabel}>Level:</span>
+        <select
+          style={styles.select}
+          value={levelFilter}
+          onChange={(e) => setLevelFilter(e.target.value as LogLevel | "")}
+        >
+          <option value="">All</option>
+          <option value="info">Info</option>
+          <option value="warn">Warn</option>
+          <option value="error">Error</option>
+          <option value="debug">Debug</option>
+        </select>
+
+        <span style={styles.filterLabel}>Source:</span>
+        <input
+          style={styles.input}
+          type="text"
+          placeholder="Filter source..."
+          value={sourceFilter}
+          onChange={(e) => setSourceFilter(e.target.value)}
+        />
+
+        <span style={styles.filterLabel}>Agent:</span>
+        <select
+          style={styles.select}
+          value={agentFilter}
+          onChange={(e) => setAgentFilter(e.target.value)}
+        >
+          <option value="">All</option>
+          {agentList.map((a) => (
+            <option key={a.sessionId} value={a.sessionId}>
+              {a.projectName || a.sessionId.slice(0, 8)}
+            </option>
+          ))}
+        </select>
+
+        <button style={styles.button} onClick={handleClearFilters}>
+          Clear Filters
+        </button>
+
+        <div style={styles.spacer} />
+
+        <button style={styles.button} onClick={handleExport}>
+          Export
+        </button>
+        <button style={styles.buttonDanger} onClick={clearLogs}>
+          Clear Logs
+        </button>
+      </div>
+
+      <div style={{ ...styles.listContainer, position: "relative" }}>
+        {filteredLogs.length === 0 ? (
+          <div style={styles.empty}>No log entries</div>
+        ) : (
+          <>
+            <Virtuoso
+              ref={virtuosoRef}
+              data={filteredLogs}
+              itemContent={(_index, entry) => <LogRow entry={entry} />}
+              followOutput="smooth"
+              atBottomStateChange={setAtBottom}
+              style={{ height: "100%" }}
+            />
+            {!atBottom && (
+              <button style={styles.scrollButton} onClick={scrollToBottom}>
+                Scroll to bottom
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

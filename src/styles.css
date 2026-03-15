@@ -1,0 +1,121 @@
+/* Global styles — Pixel Agents Desktop */
+
+/* CSS Reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Dark theme custom properties */
+:root {
+  --pixel-bg: #1e1e2e;
+  --pixel-bg-surface: #282840;
+  --pixel-bg-elevated: #313150;
+  --pixel-border: #45475a;
+  --pixel-border-light: #585b70;
+  --pixel-text: #cdd6f4;
+  --pixel-text-dim: #a6adc8;
+  --pixel-text-muted: #6c7086;
+  --pixel-accent: #89b4fa;
+  --pixel-accent-hover: #b4d0fb;
+  --pixel-success: #a6e3a1;
+  --pixel-warning: #f9e2af;
+  --pixel-error: #f38ba8;
+  --pixel-info: #89dceb;
+}
+
+/* Body */
+html,
+body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--pixel-bg);
+  color: var(--pixel-text);
+  font-family: monospace, "Courier New", Courier, system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+/* Scrollbar styling (WebKit / Chromium) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--pixel-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--pixel-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--pixel-border-light);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--pixel-bg);
+}
+
+/* Selection color */
+::selection {
+  background: rgba(137, 180, 250, 0.3);
+  color: var(--pixel-text);
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 1px solid var(--pixel-accent);
+  outline-offset: 1px;
+}
+
+/* Link defaults */
+a {
+  color: var(--pixel-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--pixel-accent-hover);
+}
+
+/* Button reset */
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+/* Input reset */
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: var(--pixel-bg-surface);
+  border: 1px solid var(--pixel-border);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--pixel-accent);
+  outline: none;
+}
