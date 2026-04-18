@@ -39,7 +39,11 @@ pub async fn login_server(
     username: String,
     password: String,
 ) -> Result<Value, String> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
     let url = format!("{}/api/auth/login", server_url.trim_end_matches('/'));
 
     let resp = client
@@ -83,7 +87,11 @@ pub async fn login_with_key(
     server_url: String,
     api_key: String,
 ) -> Result<Value, String> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
     let url = format!("{}/api/auth/login-key", server_url.trim_end_matches('/'));
 
     let resp = client

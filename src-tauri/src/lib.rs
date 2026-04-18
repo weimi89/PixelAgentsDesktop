@@ -9,7 +9,11 @@ use tauri::{Manager, RunEvent, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    env_logger::init();
+    // 預設顯示 info 以上；使用者可以透過 RUST_LOG 環境變數覆寫（例 RUST_LOG=debug）
+    env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("info"),
+    )
+    .init();
     log::info!("Pixel Agents Desktop starting...");
 
     let app = tauri::Builder::default()
@@ -18,6 +22,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_status,

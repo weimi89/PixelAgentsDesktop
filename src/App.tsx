@@ -5,6 +5,18 @@ import { useLogStore } from "./stores/logStore";
 import { setupEventListeners, type SidecarEvent } from "./tauri-api";
 import { LoginView } from "./components/LoginView";
 import { MainView } from "./components/MainView";
+import {
+  isAgentStartedPayload,
+  isSessionPayload,
+  isToolStartPayload,
+  isToolDonePayload,
+  isAgentStatusPayload,
+  isConnectionStatusPayload,
+  isTranscriptPayload,
+  isLatencyPayload,
+  isErrorPayload,
+  isTerminalExitPayload,
+} from "./lib/validators";
 
 const styles = {
   container: {
@@ -25,10 +37,9 @@ function handleSidecarEvent(event: SidecarEvent) {
     useAgentStore.getState();
   const { addLog } = useLogStore.getState();
 
-  // Rust 發 IpcEvent 序列化為 { event, data }；舊程式碼使用 { kind, payload }。
-  // 以 fallback 形式同時支援兩者，避免 Rust 端欄位改名時事件全部失效。
+  // Rust 發 IpcEvent 序列化為 { event, data }；舊欄位名為 { kind, payload }。
   const kind = (event.kind ?? event.event) as SidecarEvent["kind"];
-  const payload = (event.payload ?? event.data ?? {}) as Record<string, unknown>;
+  const payload: unknown = event.payload ?? event.data ?? {};
 
   switch (kind) {
     case "connected":
@@ -45,13 +56,13 @@ function handleSidecarEvent(event: SidecarEvent) {
 
     case "agent_created":
     case "agentStarted": {
-      const p = payload as {
-        sessionId: string;
-        projectName: string;
-      };
-      addAgent(p.sessionId, {
-        sessionId: p.sessionId,
-        projectName: p.projectName,
+      if (!isAgentStartedPayload(payload)) {
+        console.warn("[App] invalid agentStarted payload", payload);
+        break;
+      }
+      addAgent(payload.sessionId, {
+        sessionId: payload.sessionId,
+        projectName: payload.projectName,
         tools: [],
         status: "idle",
         lastActivity: Date.now(),
@@ -60,68 +71,68 @@ function handleSidecarEvent(event: SidecarEvent) {
         timestamp: Date.now(),
         level: "info",
         source: "agent",
-        agentSessionId: p.sessionId,
-        message: `代理已啟動: ${p.projectName || p.sessionId.slice(0, 8)}`,
+        agentSessionId: payload.sessionId,
+        message: `代理已啟動: ${payload.projectName || payload.sessionId.slice(0, 8)}`,
       });
       break;
     }
 
     case "agent_closed":
     case "agentStopped": {
-      const p = payload as { sessionId: string };
-      removeAgent(p.sessionId);
+      if (!isSessionPayload(payload)) {
+        console.warn("[App] invalid agentStopped payload", payload);
+        break;
+      }
+      removeAgent(payload.sessionId);
       addLog({
         timestamp: Date.now(),
         level: "info",
         source: "agent",
-        agentSessionId: p.sessionId,
-        message: `代理已停止: ${p.sessionId.slice(0, 8)}`,
+        agentSessionId: payload.sessionId,
+        message: `代理已停止: ${payload.sessionId.slice(0, 8)}`,
       });
       break;
     }
 
     case "agent_tool_start":
     case "toolStart": {
-      const p = payload as {
-        sessionId: string;
-        toolId?: string;
-        toolName: string;
-        toolStatus?: string;
-      };
-      const toolId = p.toolId ?? `${p.toolName}-${Date.now()}`;
-      addTool(p.sessionId, {
+      if (!isToolStartPayload(payload)) {
+        console.warn("[App] invalid toolStart payload", payload);
+        break;
+      }
+      const toolId = payload.toolId ?? `${payload.toolName}-${Date.now()}`;
+      addTool(payload.sessionId, {
         toolId,
-        toolName: p.toolName,
-        toolStatus: p.toolStatus ?? "running",
+        toolName: payload.toolName,
+        toolStatus: payload.toolStatus ?? "running",
         startedAt: Date.now(),
       });
       addLog({
         timestamp: Date.now(),
         level: "debug",
         source: "tool",
-        agentSessionId: p.sessionId,
-        message: `工具已啟動: ${p.toolName}`,
+        agentSessionId: payload.sessionId,
+        message: `工具已啟動: ${payload.toolName}`,
       });
       break;
     }
 
     case "agent_tool_done":
     case "toolDone": {
-      const p = payload as {
-        sessionId: string;
-        toolId?: string;
-        toolName?: string;
-      };
-      if (p.toolId) {
-        removeTool(p.sessionId, p.toolId);
-      } else if (p.toolName) {
+      if (!isToolDonePayload(payload)) {
+        console.warn("[App] invalid toolDone payload", payload);
+        break;
+      }
+      if (payload.toolId) {
+        removeTool(payload.sessionId, payload.toolId);
+      } else if (payload.toolName) {
         // Fallback: remove the first matching tool by name
         const agents = useAgentStore.getState().agents;
-        const agent = agents.get(p.sessionId);
+        const agent = agents.get(payload.sessionId);
         if (agent) {
-          const match = agent.tools.find((t) => t.toolName === p.toolName);
+          const match = agent.tools.find((t) => t.toolName === payload.toolName);
           if (match) {
-            removeTool(p.sessionId, match.toolId);
+            removeTool(payload.sessionId, match.toolId);
           }
         }
       }
@@ -129,67 +140,66 @@ function handleSidecarEvent(event: SidecarEvent) {
         timestamp: Date.now(),
         level: "debug",
         source: "tool",
-        agentSessionId: p.sessionId,
-        message: `工具已完成${p.toolName ? `: ${p.toolName}` : ""}`,
+        agentSessionId: payload.sessionId,
+        message: `工具已完成${payload.toolName ? `: ${payload.toolName}` : ""}`,
       });
       break;
     }
 
     case "agent_status": {
-      const p = payload as {
-        sessionId: string;
-        status: "active" | "idle";
-      };
-      updateAgent(p.sessionId, { status: p.status });
-      updateAgentActivity(p.sessionId);
+      if (!isAgentStatusPayload(payload)) {
+        console.warn("[App] invalid agent_status payload", payload);
+        break;
+      }
+      updateAgent(payload.sessionId, { status: payload.status });
+      updateAgentActivity(payload.sessionId);
       break;
     }
 
     case "connectionStatus": {
-      const p = payload as { connected: boolean };
-      setStatus(p.connected ? "connected" : "disconnected");
-      if (!p.connected) {
+      if (!isConnectionStatusPayload(payload)) {
+        console.warn("[App] invalid connectionStatus payload", payload);
+        break;
+      }
+      setStatus(payload.connected ? "connected" : "disconnected");
+      if (!payload.connected) {
         clearAgents();
       }
       addLog({
         timestamp: Date.now(),
         level: "info",
         source: "connection",
-        message: `連線: ${p.connected ? "已連線" : "已中斷"}`,
+        message: `連線: ${payload.connected ? "已連線" : "已中斷"}`,
       });
       break;
     }
 
     case "transcript": {
-      const p = payload as {
-        sessionId?: string;
-        summary?: string;
-        message?: string;
-      };
+      if (!isTranscriptPayload(payload)) break;
       addLog({
         timestamp: Date.now(),
         level: "info",
         source: "transcript",
-        agentSessionId: p.sessionId,
-        message: p.summary || p.message || "對話記錄更新",
+        agentSessionId: payload.sessionId,
+        message: payload.summary || payload.message || "對話記錄更新",
       });
       break;
     }
 
     case "latency": {
-      const p = payload as { ms: number };
-      setLatency(p.ms);
+      if (!isLatencyPayload(payload)) break;
+      setLatency(payload.ms);
       break;
     }
 
     case "error": {
-      const p = payload as { message: string };
-      setError(p.message);
+      if (!isErrorPayload(payload)) break;
+      setError(payload.message);
       addLog({
         timestamp: Date.now(),
         level: "error",
         source: "sidecar",
-        message: p.message,
+        message: payload.message,
       });
       break;
     }
@@ -201,25 +211,25 @@ function handleSidecarEvent(event: SidecarEvent) {
       break;
 
     case "terminalReady": {
-      const p = payload as { sessionId: string };
+      if (!isSessionPayload(payload)) break;
       addLog({
         timestamp: Date.now(),
         level: "info",
         source: "terminal",
-        agentSessionId: p.sessionId,
+        agentSessionId: payload.sessionId,
         message: "終端機就緒",
       });
       break;
     }
 
     case "terminalExit": {
-      const p = payload as { sessionId: string; code?: number };
+      if (!isTerminalExitPayload(payload)) break;
       addLog({
         timestamp: Date.now(),
         level: "warn",
         source: "terminal",
-        agentSessionId: p.sessionId,
-        message: `終端機已結束 (代碼: ${p.code ?? "未知"})`,
+        agentSessionId: payload.sessionId,
+        message: `終端機已結束 (代碼: ${payload.code ?? "未知"})`,
       });
       break;
     }
