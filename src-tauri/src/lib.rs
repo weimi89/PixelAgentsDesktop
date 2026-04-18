@@ -1,3 +1,25 @@
+//! # Pixel Agents Desktop — Rust 後端
+//!
+//! Tauri 2.x 應用主體。本 crate 負責：
+//!
+//! 1. 初始化 tracing 日誌與內部診斷計數器（`init_tracing` / `diagnostics::init`）
+//! 2. 註冊 Tauri 外掛：`shell`、`autostart`、`window_state`、`updater`、`process`
+//! 3. 建立並管理 Node.js sidecar 子程序生命週期（見 [`sidecar`]）
+//! 4. 暴露 Tauri 命令給前端（見 [`commands`]）
+//! 5. 安裝系統匣（見 [`tray`]）與 macOS 原生選單列（見 [`menu`]）
+//! 6. 從 `~/.pixel-agents/node-config.json` 載入伺服器 URL，並從 OS keychain
+//!    讀取 token 自動連線（見 [`secret_store`]）
+//!
+//! ## 關鍵設計
+//!
+//! - `AppState.sidecar` 為 [`Arc<SidecarManager>`](sidecar::SidecarManager)，
+//!   不包外層 `Mutex` — `SidecarManager` 內部全為 `Arc<Mutex/Atomic>`。
+//!   這避免了舊版 `Mutex<SidecarManager>` 在 shutdown 路徑與 reader task
+//!   restart 路徑之間造成的鎖定順序死鎖。
+//! - 關閉視窗時僅 `hide()` 不 `close()`，應用維持背景運作直到從系統匣
+//!   選單「結束」或 macOS Cmd+Q。
+//! - macOS 視窗策略為 `ActivationPolicy::Accessory`，不佔用 Dock icon。
+
 mod commands;
 mod diagnostics;
 mod ipc;
@@ -9,11 +31,15 @@ mod tray;
 
 use tracing_subscriber::EnvFilter;
 
+/// 初始化 tracing subscriber。
+///
+/// - `tracing_log::LogTracer` 將 `log` crate 的訊息橋接到 tracing；
+///   Tauri / tokio 等依賴仍以 `log!` 輸出，必須橋接才能統一落地。
+/// - 預設 filter 為 `info`；`RUST_LOG=debug` 可覆寫（例如 debug sidecar IPC）。
+/// - 使用 `try_init` 避免測試環境中重複初始化 panic。
 fn init_tracing() {
-    // 把 log crate 的訊息橋接到 tracing（Tauri 與 tokio 等依賴仍使用 log!）
     let _ = tracing_log::LogTracer::init();
 
-    // RUST_LOG=debug 可覆寫；預設 info
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     let _ = tracing_subscriber::fmt()
         .with_env_filter(filter)
@@ -25,6 +51,8 @@ fn init_tracing() {
 use state::AppState;
 use tauri::{Manager, RunEvent, WindowEvent};
 
+/// 應用程式入口。由 `main.rs` 呼叫；標記 `#[tauri::mobile_entry_point]`
+/// 讓未來行動端共用同一個入口。
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_tracing();

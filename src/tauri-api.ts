@@ -1,3 +1,22 @@
+/**
+ * # tauri-api — 前端與 Rust 後端的唯一橋樑
+ *
+ * 所有 `invoke()` / `listen()` 呼叫都集中在這裡包裝為 typed helper；
+ * 其他元件不應直接 `import { invoke } from "@tauri-apps/api/core"`。
+ *
+ * ## 為什麼集中
+ *
+ * 1. **型別安全**：每個 command 有對應的參數 / 返回型別 interface
+ * 2. **命令名核對**：Rust `#[tauri::command] fn foo_bar` 對應 `invoke("foo_bar")`，
+ *    若某處拼錯成 `invoke("fooBar")` 會 runtime 失敗（過去真實 bug）
+ * 3. **mock 友善**：vitest 只需 mock `@tauri-apps/api/core` 一次即可測所有元件
+ *
+ * ## 事件與命令對照
+ *
+ * - **命令名稱**：見 `src-tauri/src/commands.rs` 模組註解的對照表
+ * - **事件名稱**：[[SidecarEventKind]] 列出所有 sidecar 會發的 event 值
+ */
+
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 

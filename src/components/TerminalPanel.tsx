@@ -1,3 +1,24 @@
+/**
+ * # TerminalPanel — xterm.js 終端機介面
+ *
+ * 將使用者輸入送到 sidecar 的 [[TerminalRelay]]，並將 sidecar 發回的
+ * `terminalData` 事件寫入 xterm。
+ *
+ * ## Attach/Detach 生命週期
+ *
+ * - 選擇 agent → `terminalAttach(sessionId, cols, rows)`
+ * - 切換到其他 agent → 先 `terminalDetach(prev)` 再 attach 新的
+ * - 元件卸載 → cleanup 呼叫 `terminalDetach`
+ *
+ * Sidecar 側以 `epoch + intentionalClose` 區分主動/被動關閉，前端不需
+ * 關心（見 [[TerminalRelay]] 註解）。
+ *
+ * ## Lazy load
+ *
+ * 本檔包含 `@xterm/xterm` 與 `@xterm/addon-fit`（~300KB）；
+ * [[MainView]] 以 `React.lazy` 只在切到終端機 tab 時載入。
+ */
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useAgentStore } from "../stores/agentStore";

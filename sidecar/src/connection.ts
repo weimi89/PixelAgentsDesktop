@@ -1,10 +1,30 @@
-// ── AgentNodeConnection: Socket.IO client to central server ──
-// Adapted from web/agent-node/src/connection.ts for pixel-agents-desktop sidecar
+/**
+ * # AgentNodeConnection — Socket.IO 客戶端
+ *
+ * 連至 Pixel Agents 伺服器的 `/agent-node` namespace。負責：
+ *
+ * - 認證（`auth: { token }`）
+ * - 定期送出 heartbeat 含 active session 數，讓伺服器判斷此 Agent Node 存活
+ * - 轉發本地 [[AgentTracker]] 產生的 `AgentNodeEvent` 至伺服器
+ * - 接收伺服器主動推送的 `ServerNodeMessage`（resumeSession、terminalAttach 等）
+ *
+ * ## 安全注意
+ *
+ * `connect_error` 事件的 `err.message` 可能含 auth payload 或 token 片段；
+ * 本模組僅輸出錯誤名稱（如 `"ConnectError"`），不輸出訊息內容，防止
+ * RUST_LOG=debug 時敏感資訊落到系統日誌。
+ *
+ * ## 重連策略
+ *
+ * 使用 Socket.IO 內建的 exponential backoff：`reconnectionDelay` 2s 起、
+ * 上限 10s，無限重試。重連成功會觸發 `onReconnect` 讓 Bridge 重新掃描。
+ */
 
 import { io, type Socket } from 'socket.io-client';
 import type { AgentNodeEvent, ServerNodeMessage } from '../../shared/protocol.js';
 
-/** Agent Node 心跳間隔（與伺服器 AGENT_NODE_HEARTBEAT_INTERVAL_MS 對應） */
+/** Heartbeat 間隔；與伺服器 `AGENT_NODE_HEARTBEAT_INTERVAL_MS` 同步。
+ *  伺服器會在 2× 此間隔沒收到 heartbeat 後將 Agent Node 標記為離線。 */
 const HEARTBEAT_INTERVAL_MS = 30_000;
 
 export interface TerminalMessageHandler {

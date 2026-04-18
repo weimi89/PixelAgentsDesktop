@@ -1,3 +1,22 @@
+/**
+ * # LoginView — 未連線時的登入表單
+ *
+ * 兩種認證模式：
+ * - **API 金鑰**：直接拿 `apiKey` 作為 token 呼叫 `connect_server`
+ * - **密碼**：先 `login_server(url, user, pwd)` 取得 token，再 `connect_server`
+ *
+ * ## 無障礙
+ *
+ * 包為 `<form>` + `aria-labelledby`；輸入欄位有 htmlFor/id、autoComplete、
+ * required；authMode 切換為 `role="radiogroup"`；顯示密碼按鈕 `aria-pressed`；
+ * 錯誤以 `role="alert" aria-live="assertive"` 即時播報給螢幕閱讀器。
+ *
+ * ## 成功路徑
+ *
+ * connect 成功後 [[useConnectionStore]] 的 status 改為 `connected`，
+ * `App.tsx` 重渲染會切到 [[MainView]]。
+ */
+
 import { useState } from "react";
 import { connect as connectServer, loginServer } from "../tauri-api";
 import { useConnectionStore } from "../stores/connectionStore";

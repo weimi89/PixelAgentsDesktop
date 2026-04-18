@@ -1,3 +1,33 @@
+//! # Tauri 命令（invoke handlers）
+//!
+//! 本模組是**前端與 Rust 後端的所有接觸面**。每個 `#[tauri::command]` 函式
+//! 都暴露給前端經由 `@tauri-apps/api` 的 `invoke()` 呼叫。
+//!
+//! ## 命令對照表
+//!
+//! | 命令                       | 前端呼叫（`src/tauri-api.ts`） | 說明                             |
+//! |----------------------------|--------------------------------|----------------------------------|
+//! | `get_status`               | `getStatus()`                  | 查詢 sidecar 狀態（已連線/代理數/延遲） |
+//! | `connect_server`           | `connect(url, token)`          | 建立遠端伺服器連線               |
+//! | `disconnect_server`        | `disconnect()`                 | 中斷連線                         |
+//! | `login_server`             | `loginServer(url, user, pwd)`  | 密碼登入取得 token               |
+//! | `login_with_key`           | `loginWithKey(url, apiKey)`    | API 金鑰登入取得 token           |
+//! | `load_config`              | `loadConfig()`                 | 讀取 `~/.pixel-agents/node-config.json` + keychain token |
+//! | `save_config`              | `saveConfig(url, token)`       | 寫入 config（token 優先入 keychain） |
+//! | `logout`                   | `logout()`                     | 斷線 + 刪 config + 清 keychain   |
+//! | `terminal_attach` 等       | `terminalAttach()` 等          | 終端機 PTY 轉送                  |
+//! | `load_settings` / `save_`  | `loadSettings()` / `saveSettings()` | UI 偏好設定                  |
+//! | `update_scan_interval`     | `updateScanInterval()`         | 動態改 sidecar 掃描間隔          |
+//! | `update_excluded_projects` | `updateExcludedProjects()`     | 動態同步排除清單                 |
+//! | `get_diagnostics`          | `getDiagnostics()`             | 內部計數快照                     |
+//! | `report_crash`             | `reportCrash()`                | 前端錯誤持久化到 crashes/        |
+//! | `list_crashes` / `clear_`  | `listCrashes()` / `clearCrashes()` | 管理 crash 紀錄              |
+//!
+//! ## 錯誤回傳
+//!
+//! Tauri 會把 `Err(String)` 的訊息以 JS Error 型式丟回前端的 `invoke()` caller。
+//! 所有錯誤訊息都應是人類可讀字串（而非 opaque 狀態碼）。
+
 use serde_json::{json, Value};
 use std::fs;
 use std::path::PathBuf;

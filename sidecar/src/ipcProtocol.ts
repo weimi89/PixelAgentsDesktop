@@ -1,4 +1,10 @@
-// ── IPC Protocol: Rust (Tauri) ↔ Node.js (Sidecar) via NDJSON over stdin/stdout ──
+/**
+ * # IPC 協定型別（Sidecar 側對應 Rust `src-tauri/src/ipc.rs`）
+ *
+ * 兩側 schema **必須保持同步**；新增欄位請同時更新對應 Rust struct。
+ * 測試 `tests/sidecar-ipc.test.ts` 會實際 spawn sidecar 驗證 NDJSON 協定。
+ */
+
 
 /** Request from Rust → Node */
 export interface IpcRequest {

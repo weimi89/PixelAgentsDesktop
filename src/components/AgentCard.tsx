@@ -1,3 +1,21 @@
+/**
+ * # AgentCard — 單個 agent 的卡片
+ *
+ * 接收 `sessionId` 而非 agent 物件：內部以 `useAgentStore((s) => s.agents.get(id))`
+ * 訂閱該 agent；只有該 agent 變更時本 card 才 re-render。
+ *
+ * ## 工具 badge 色系
+ *
+ * [[TOOL_COLORS]] 是**跨主題固定** 的語意色（File 操作=藍、Bash=綠等），
+ * 不跟隨 dark/light theme 切換，以維持工具類別的視覺識別。
+ *
+ * ## React.memo
+ *
+ * 外層以 `memo` 包裝，配合父層 `AgentList` 的 `sessionIds` selector，
+ * 保證：父層 state 變動（例如 tab 切換重渲染）時 AgentCard 不會重跑
+ * selector；只有真的該 agent 變動時才 re-render。
+ */
+
 import { memo, useState } from "react";
 import { useAgentStore, type ToolInfo } from "../stores/agentStore";
 import { useTick } from "../hooks/useTick";

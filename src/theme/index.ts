@@ -1,5 +1,25 @@
+/**
+ * # Theme — Catppuccin Mocha (dark) / Latte (light)
+ *
+ * 三模式：
+ * - `dark`：強制深色
+ * - `light`：強制淺色
+ * - `system`：跟隨作業系統 `prefers-color-scheme`
+ *
+ * `mode` 是使用者偏好，`resolved` 是 `system` 解析後的實際值。UI 綁
+ * `useThemeColors()` 拿當前色票，theme 切換會即時重渲染。
+ *
+ * ## 新增色票步驟
+ *
+ * 1. 在 [[ThemeColors]] interface 加新欄位
+ * 2. 在 [[DARK_THEME]] 與 [[LIGHT_THEME]] 填入對應值
+ * 3. 若需供 CSS 使用，在 [[ThemeApplier]] 內 `setProperty` 寫入
+ *    `--pixel-*` custom property
+ */
+
 import { create } from "zustand";
 
+/** 使用者可選的主題模式。`system` 會依 `prefers-color-scheme` 動態解析。 */
 export type ThemeMode = "dark" | "light" | "system";
 
 export interface ThemeColors {

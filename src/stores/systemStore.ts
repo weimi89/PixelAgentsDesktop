@@ -1,5 +1,17 @@
+/**
+ * # System store
+ *
+ * 全域系統狀態：頂部 [[NoticeBanner]] 的當前通知、sidecar 協定版本。
+ *
+ * - `notice` 由 [[App.tsx]] 在收到 sidecar-crash / ready version mismatch
+ *   等事件時寫入；非 fatal 的 8 秒後自動消失。
+ * - `sidecarVersion` 由 sidecar 的 `ready` 事件填入，顯示於 [[StatusBar]]
+ *   末尾供故障排查使用。
+ */
+
 import { create } from "zustand";
 
+/** 通知等級，決定 [[NoticeBanner]] 顏色與 ARIA role (alert vs status)。 */
 export type SystemNoticeLevel = "info" | "warn" | "error";
 
 export interface SystemNotice {

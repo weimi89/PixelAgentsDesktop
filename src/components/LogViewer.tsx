@@ -1,3 +1,26 @@
+/**
+ * # LogViewer — 日誌分頁
+ *
+ * 以 `react-virtuoso` 虛擬化渲染；可支援數千條日誌不卡頓。
+ *
+ * ## 篩選
+ *
+ * 三個維度：等級、來源（子字串不分大小寫）、代理。透過
+ * [[useFilteredLogs]] 在 render 時 `useMemo` 計算。
+ *
+ * ## 自動捲動
+ *
+ * `followOutput="smooth"` 由 Virtuoso 內建：使用者在底部時新日誌進來
+ * 自動捲動，滑離底部時不打擾。`atBottomStateChange` 供顯示「捲動到底」
+ * 按鈕。**不** 額外寫 `useEffect` 手動 `scrollToIndex`，會與 followOutput
+ * 互搶時機。
+ *
+ * ## 匯出
+ *
+ * 匯出 **全部** 日誌（不套用當前篩選，這是慣例），以 Blob URL + 隱形
+ * `<a>.click()` 觸發下載。
+ */
+
 import { useState, useRef, useCallback } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import {

@@ -1,3 +1,18 @@
+/**
+ * # SettingsView — 設定分頁
+ *
+ * 分為六個區塊：
+ *
+ * 1. **連線**：顯示目前伺服器 URL / 狀態 / 登出
+ * 2. **掃描**：scanIntervalMs 滑桿 + excludedProjects 標籤管理
+ * 3. **應用程式**：語言（zh-TW / en / ja）、主題（dark / light / system）、
+ *    autoStart、startMinimized
+ * 4. **診斷**：即時顯示 IPC 計數、sidecar spawn/restart/crash、HTTP retry
+ * 5. **崩潰紀錄**：列出 `~/.pixel-agents/crashes/` 的 JSON，提供「開啟資料夾」
+ *    與「清除（搬至 archive）」
+ * 6. **關於**：版本、更新檢查（見 [[UpdateStatus]]）、GitHub 連結
+ */
+
 import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useConnectionStore } from "../stores/connectionStore";

@@ -1,9 +1,33 @@
+/**
+ * # TerminalRelay — PTY 終端轉送
+ *
+ * 為前端 xterm.js 提供後端 shell 連接。優先嘗試 `tmux attach` 到
+ * `pixel-agents-{sessionId}` session（若 Claude Code 有開），否則 fallback
+ * 為 `$SHELL` 或 `/bin/bash`，工作目錄設為 agent 專案目錄。
+ *
+ * 以 `child_process.spawn` 而非 `node-pty`，避免 native 依賴造成打包難度。
+ * 限制：不支援真正的 PTY 訊號（Ctrl+C 等需要 shell 內部解讀）與正確的
+ * resize — resize 只能透過 `tmux resize-window` 間接實現。
+ *
+ * ## epoch + intentionalClose — 解決 attach/detach race
+ *
+ * 同一 sessionId 可能快速 detach → attach；舊 terminal 的 `close` 事件
+ * 可能在新 terminal 建立後才到達。若直接 `this.terminals.delete(sessionId)`
+ * 會誤殺新 terminal。改用：
+ *
+ * - `epoch`：每個 terminal 實例遞增編號
+ * - `intentionalClose`：主動 detach 標記，`close` 事件檢查此 flag 決定
+ *   是否通知前端（被動 exit 才顯示「終端機已結束」）
+ *
+ * `close` / `error` handler 同時檢查 `map.get(sessionId)?.epoch === epoch`
+ * 才清除；確保只有「當前」terminal 的 exit 才影響 state。
+ */
+
 import { spawn, type ChildProcess } from 'child_process';
 import * as os from 'os';
 
-/** Default terminal columns */
+/** 若前端未指定，使用這組預設尺寸；多數 shell 會以此為初始 term size。 */
 const DEFAULT_COLS = 80;
-/** Default terminal rows */
 const DEFAULT_ROWS = 24;
 
 interface ManagedTerminal {

@@ -1,8 +1,21 @@
-// 對 @tauri-apps/plugin-updater 的輕量包裝。
-//
-// 如果 tauri.conf.json 的 plugins.updater.endpoints 為空，check() 會在
-// plugin 內部直接 Err；我們把它轉成特定錯誤型別，UI 可顯示友善訊息
-// 「此版本未設定更新伺服器」而非原始錯誤訊息。
+/**
+ * # Updater 包裝
+ *
+ * 把 `@tauri-apps/plugin-updater` 的 `check()` 錯誤分類為我們的
+ * [[UpdateCheckResult]] 狀態機，UI 層（[[SettingsView]] 的
+ * `UpdateStatus`）可以據此呈現對應訊息：
+ *
+ * - `notConfigured`：`tauri.conf.json` 的 `plugins.updater.endpoints`
+ *   為空時 plugin 會拋錯，開發版 / 未簽章版很常見；顯示「此建置尚未設定
+ *   更新伺服器」而不是嚇人的原始錯誤。
+ * - `available`：返回帶 `download()` closure 的 result；UI 按下載按鈕時
+ *   呼叫 `downloadAndInstall` + `relaunch`。
+ *
+ * ## 動態 import
+ *
+ * `@tauri-apps/plugin-updater` 與 `@tauri-apps/plugin-process` 以
+ * `await import()` 載入，避免這兩個套件被打包進首屏 bundle。
+ */
 
 export type UpdateCheckResult =
   | { kind: "noUpdate" }

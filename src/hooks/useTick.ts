@@ -1,8 +1,26 @@
-import { useSyncExternalStore } from "react";
+/**
+ * # useTick — 全域共用 1 秒 tick
+ *
+ * 當多個元件都需要「N 秒前 / N 分鐘前」這類相對時間顯示，每個各自建立
+ * `setInterval` 會讓 50 個 AgentCard + 每個 ToolBadge 產生 50+ 個 timer
+ * 同時燒 CPU。本 hook 用 `useSyncExternalStore` 將訂閱統一到單一 interval。
+ *
+ * ## 自動管理
+ *
+ * - 第一個訂閱者觸發 `startIfNeeded()` 建立 interval
+ * - 最後一個訂閱者卸載時 `stopIfIdle()` 清除 interval
+ * - 不訂閱時零背景工作
+ *
+ * ## 用法
+ * ```tsx
+ * function Badge({ startedAt }) {
+ *   useTick();                        // 不需要用返回值，只是強制每秒重渲染
+ *   return <span>{formatElapsed(startedAt)}</span>;
+ * }
+ * ```
+ */
 
-// 全域共用的每秒 tick — 所有需要「相對時間」顯示的元件訂閱同一個 interval，
-// 取代每個 AgentCard / ToolBadge 各自建立 setInterval 的模式，
-// 避免 50 個 agent 時 50+ 個 timer 同時執行。
+import { useSyncExternalStore } from "react";
 
 let tick = 0;
 const listeners = new Set<() => void>();

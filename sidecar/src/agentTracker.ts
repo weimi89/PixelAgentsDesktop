@@ -1,5 +1,29 @@
-// ── AgentTracker: watch JSONL files and emit parsed events ──
-// Adapted from web/agent-node/src/agentTracker.ts for pixel-agents-desktop sidecar
+/**
+ * # AgentTracker — 逐行監視 Claude Code JSONL
+ *
+ * 對 [[Scanner]] 判定活躍的每個 session，以 `fs.watch` + polling timer
+ * 雙保險增量讀取新寫入的行，丟給 [[parseJsonlLine]] 轉成 `AgentNodeEvent`。
+ *
+ * ## 初始回放
+ *
+ * 首次 `startTracking` 時並非從檔尾開始；會保留最後 `INITIAL_REPLAY_MAX_BYTES`
+ * 字節（預設 256KB）以便 UI 能看到當前模型、進行中工具等狀態 — 否則使用者
+ * 必須等 Claude 下次寫檔才看得到代理細節。
+ *
+ * 回放可能切在某行中間，`parseJsonlLine` 對壞 JSON 會靜默 skip，不影響
+ * 後續正確行的解析。
+ *
+ * ## 重入保護
+ *
+ * `agent.reading` flag 防止 `fs.watch` 與 polling timer 在檔案快速寫入時
+ * 同時觸發 `readNewLines`，避免 `fileOffset` 雙重推進。
+ *
+ * ## I/O 策略
+ *
+ * 使用 `fsPromises.FileHandle.read` 非同步分塊（4MB chunk）讀取，避免
+ * 一次性分配巨大 Buffer 阻塞 event loop。舊版 `fs.readSync` 會在 JSONL
+ * 暴增時讓整個 IPC 主迴圈凍結。
+ */
 
 import * as fs from 'fs';
 import * as fsp from 'fs/promises';

@@ -1,3 +1,21 @@
+/**
+ * # useKeyboardShortcuts
+ *
+ * 註冊全域鍵盤快捷鍵。在 [[MainView]] 使用以提供 Cmd/Ctrl+1~4 切分頁、
+ * Cmd/Ctrl+D 中斷連線等操作。
+ *
+ * ## mod 鍵
+ *
+ * `mod: true` 表示需要 Cmd（macOS）或 Ctrl（win/linux），內部以
+ * `e.metaKey || e.ctrlKey` 判別，自動跨平台。
+ *
+ * ## 輸入欄位保護
+ *
+ * 當焦點在 `<input>` / `<textarea>` / `<select>` / contenteditable 時，
+ * 非 mod 組合不攔截，避免 `1` 鍵在填表時被吃掉。mod 組合仍生效
+ * （如 Cmd+1 切 tab 在任何地方都有效）。
+ */
+
 import { useEffect } from "react";
 
 export interface ShortcutBinding {

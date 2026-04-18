@@ -1,3 +1,13 @@
+/**
+ * # StatusBar — 底部狀態列
+ *
+ * 顯示連線狀態指示燈、server URL（可點擊複製）、延遲 ms、代理數、
+ * 錯誤訊息（若有）、sidecar 協定版本、中斷連線按鈕。
+ *
+ * 以 `useConnectionStore()` 解構整個 state；此元件在已連線時頻繁更新
+ * （每次 latency 變動重渲染），這是可接受的 — 整條 bar 不含任何 heavy DOM。
+ */
+
 import { useState } from "react";
 import { useConnectionStore } from "../stores/connectionStore";
 import { useSystemStore } from "../stores/systemStore";

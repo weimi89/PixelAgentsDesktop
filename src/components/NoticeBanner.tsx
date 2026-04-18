@@ -1,3 +1,15 @@
+/**
+ * # NoticeBanner — 頂部系統通知列
+ *
+ * 顯示 [[useSystemStore]] 中的當前 notice。非 fatal 的 notice 8 秒後
+ * 自動消失（fatal 的則必須使用者手動關閉）。
+ *
+ * ## 無障礙
+ *
+ * 依等級動態設 `role="alert"`（error，assertive）或 `role="status"`
+ * （info/warn，polite），讓螢幕閱讀器以合適強度播報。
+ */
+
 import { useEffect } from "react";
 import { useSystemStore } from "../stores/systemStore";
 import { useTranslation } from "../i18n";

@@ -1,3 +1,19 @@
+/**
+ * # App — 根元件與中央事件分派器
+ *
+ * - 依 `connectionStore.status` 切換 [[LoginView]] / [[MainView]]
+ * - 註冊 `sidecar-event` / `sidecar-crash` listener 一次，路由到對應 store
+ * - [[handleSidecarEvent]] 是 **非 React context 下** 執行的全域函式，
+ *   以 `useXxxStore.getState()` 直接操作 store；不能用 hook
+ * - 頂層掛 [[ThemeApplier]]（一次性，讀 theme 模式套用到 html）與
+ *   [[NoticeBanner]]（全應用可見的系統通知列）
+ *
+ * ## Payload 驗證
+ *
+ * 所有事件 payload 先經 [[validators]] type guard；不合法時 console.warn
+ * 並 skip，避免 sidecar 發出異常結構造成 runtime crash。
+ */
+
 import { useEffect } from "react";
 import { useConnectionStore } from "./stores/connectionStore";
 import { useAgentStore } from "./stores/agentStore";

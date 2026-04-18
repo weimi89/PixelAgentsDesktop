@@ -1,9 +1,31 @@
-// ── Bridge: connects sidecar to pixel-agents server via Scanner/AgentTracker/Connection ──
-//
-// Orchestrates:
-//   - AgentNodeConnection — Socket.IO client to central server
-//   - AgentTracker — watch JSONL files and parse events
-//   - Scanner — discover active Claude sessions in ~/.claude/projects/
+/**
+ * # Bridge — Sidecar 業務協調中樞
+ *
+ * 協調三個獨立子系統：
+ *
+ * 1. [[AgentNodeConnection]]：Socket.IO 客戶端，連至 Pixel Agents 伺服器
+ * 2. [[AgentTracker]]：監視每個 JSONL 檔、解析事件
+ * 3. [[Scanner]]：輪詢 `~/.claude/projects/` 發現新的活躍 session
+ * 4. [[TerminalRelay]]：為前端提供 PTY 終端轉送
+ *
+ * ## 事件雙向流
+ *
+ * - **上行**（scanner → tracker → parser → Bridge）：解析後的 `AgentNodeEvent`
+ *   會同時送到：
+ *   - `connection.sendEvent()` 轉發至遠端伺服器
+ *   - `_onEvent()` 作為 IPC event 送到 Rust / 前端（`handleAgentEvent`）
+ *
+ * - **下行**（伺服器 → Connection → Bridge）：伺服器主動推的 resume / 終端
+ *   指令透過 Connection 的 handler 回呼進入 Bridge。
+ *
+ * ## Lifecycle
+ *
+ * `connect()` 內以 try/catch 包 `connectInternal()`，任何階段失敗立即呼叫
+ * `disconnect()` 避免 tracker / scanner / connection 之一半啟動造成洩漏。
+ *
+ * `disconnect()` 主動對目前每個 agent 發 `agentStopped` IPC 事件，確保前端
+ * store 的 agent 列表清空，不靠後續 connectionStatus 事件間接處理。
+ */
 
 import type { IpcEvent } from './ipcProtocol.js';
 import type { AgentNodeEvent } from '../../shared/protocol.js';
@@ -12,6 +34,7 @@ import { AgentTracker } from './agentTracker.js';
 import { Scanner } from './scanner.js';
 import { TerminalRelay } from './terminalRelay.js';
 
+/** Bridge 內部對 agent 的精簡表示（只需 id + 專案名稱以支援 terminal 查詢）。 */
 export interface AgentInfo {
 	sessionId: string;
 	projectName: string;

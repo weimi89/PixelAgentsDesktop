@@ -1,6 +1,29 @@
+/**
+ * # Log store — 環形緩衝區
+ *
+ * UI 顯示的日誌串流。使用 **固定長度環形陣列** 而非 `[...logs, newLog]`
+ * 無限 push，避免：
+ *
+ * - 每次 push 都 O(n) slice 陣列（5000 長度 × 每秒 50 筆 = 持續性 GC 壓力）
+ * - 長跑時記憶體無界增長
+ *
+ * ## 資料流
+ *
+ * - `addLog`：以 `head` 索引寫入下一個位置，必要時覆寫最舊 entry；
+ *   **必須** 產生新 buffer 引用才能讓 selector 察覺變化。
+ * - `useOrderedLogs`：訂閱 `buffer/head/count` 變化，合成舊→新的陣列。
+ * - `snapshotOrderedLogs`：同功能但不訂閱 store（給「匯出」等一次性需求）。
+ *
+ * ## 為何不用 Array.prototype.shift?
+ *
+ * `shift` 在 V8 上雖快但仍是 O(n)，當緩衝滿後每次 push 都要 shift 會抵消
+ * 環形陣列帶來的好處。固定索引覆寫是嚴格 O(1) 寫入。
+ */
+
 import { create } from "zustand";
 import { useMemo } from "react";
 
+/** 日誌等級，對應 UI 的顏色與 Virtuoso 篩選。 */
 export type LogLevel = "info" | "warn" | "error" | "debug";
 
 export interface LogEntry {

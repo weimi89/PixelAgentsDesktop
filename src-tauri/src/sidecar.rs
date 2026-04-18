@@ -1,3 +1,39 @@
+//! # SidecarManager — Node.js sidecar 子程序管理
+//!
+//! 本模組是 Rust 後端的核心；負責啟動 `node sidecar.mjs` 子程序、透過
+//! NDJSON 與其雙向通訊、監控崩潰並自動重啟、將 sidecar 事件轉發為
+//! Tauri events 供前端訂閱。
+//!
+//! ## 併發模型
+//!
+//! `SidecarManager` 全部欄位為 `Arc<Mutex/Atomic/Notify>`，所有方法皆
+//! 採 `&self`（唯一例外是 `spawn` / `install_child` 用 `self: Arc<Self>`
+//! 以滿足 recursive-async Send 推導）。這保證：
+//!
+//! 1. 多個 Tauri 命令可以並行呼叫 `request()` 不互相阻塞
+//! 2. shutdown 路徑不會與 reader task 的 restart 路徑搶鎖
+//! 3. AppState 本身不需外層 `Mutex`（見 [`crate::state::AppState`]）
+//!
+//! ## Reader task 職責
+//!
+//! 每次 `install_child` 都會 `tokio::spawn` 一個後台 task 負責：
+//!
+//! 1. 逐行讀取 sidecar stdout，解析成 [`IpcMessage`]
+//! 2. `Response` → 以 `id` 在 [`PendingMap`] 取出 oneshot sender 喚醒 await 中的 `request()`
+//! 3. `Event` → 呼叫 [`handle_tray_event`] 更新 tray 狀態，並 emit `"sidecar-event"` 給前端
+//! 4. stdout 關閉（EOF）時：
+//!    - 先 drain `PendingMap` 全部送 `Err("Sidecar exited")` 讓等待中的 `request()` 立即回傳
+//!    - 若非 shutdown，觸發 restart 流程（指數退避 1s → 3s → 9s，5 分鐘內最多 3 次）
+//!    - 重啟成功後依照 `last_connect_params` 自動重新 connect
+//!
+//! ## 重要不變式
+//!
+//! - 任何 `request()` 失敗都會先從 pending map 移除自己的 entry，避免洩漏。
+//! - `next_id` 是全域 `AtomicU64`，跨 restart 不重置 — 防止舊 response
+//!   誤配對新 request（實務上 64-bit 計數永不溢位）。
+//! - `shutting_down` flag 必須在送出 `shutdown` IPC 前先 set；reader task
+//!   檢查此 flag 決定要不要 restart。
+
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -17,7 +53,12 @@ use crate::diagnostics;
 use crate::ipc::{decode_line, encode_request, IpcMessage, IpcRequest};
 use crate::tray;
 
-/// Pending request: maps request ID → oneshot sender for the response.
+/// 待回應請求映射：`request id` → 預期填入結果的 oneshot sender。
+///
+/// `request()` 送出 NDJSON 後註冊 entry，reader task 收到對應 `id` 的
+/// response 後移除 entry 並填入 channel，讓 `request()` 的 await 回傳。
+/// 若 sidecar 提前退出，reader task 會把整個 map drain 並對所有 sender
+/// 送 `Err`，避免前端 request 卡 10 秒 timeout。
 type PendingMap = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value, String>>>>>;
 
 /// Maximum restarts within the reset window.

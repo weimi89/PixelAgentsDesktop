@@ -1,13 +1,39 @@
-// ── Pixel Agents Sidecar: NDJSON IPC over stdin/stdout ──
-//
-// Usage:  echo '{"id":1,"method":"getStatus"}' | node sidecar/dist/sidecar.mjs
-//
-// All human-readable logs go to stderr. Only NDJSON protocol messages go to stdout.
+/**
+ * # Sidecar 進入點
+ *
+ * 本檔為 Node.js sidecar 的 `main()` 函式所在。職責：
+ *
+ * 1. **重寫 console**：`console.log/error/warn` 全部改為送出 `"log"` 事件
+ *    到 Rust 並 mirror 到 stderr。**stdout 只能放 NDJSON 協定訊息**，否則
+ *    Rust 端 decode_line 會因為非 JSON 而報 warn、且可能漏接後續真實回應。
+ *
+ * 2. **stdin 行解析**：以 `readline` 逐行讀取，分派到 `handleRequest`。
+ *    malformed JSON 時輸出 stderr 警告並跳過（不拋錯中斷主迴圈）。
+ *
+ * 3. **stdout 背壓**：`writeLine` 包裝 `process.stdout.write`，若 kernel
+ *    pipe 滿（回 false）則排進 `pendingWrites` 佇列，監聽 `drain` 事件後
+ *    續寫。避免高頻 `terminalData` 導致 Node 內部 buffer 無限膨脹 OOM。
+ *
+ * 4. **terminalData 合併**：同一 sessionId 的 data chunk 在 16ms window
+ *    內累積後批次送出，降低 Rust ↔ 前端 IPC 轉發量約 10×。
+ *
+ * 5. **Bridge 協調**：所有業務邏輯委派給 [[Bridge]]（JSONL 掃描 / Socket.IO /
+ *    PTY 轉送）；`main.ts` 只做協定層。
+ *
+ * ## 手動測試
+ * ```bash
+ * echo '{"id":1,"method":"getStatus"}' | node sidecar/dist/sidecar.mjs
+ * ```
+ *
+ * 預期收到兩行：`{"event":"ready",...}` 與 `{"id":1,"result":...}`。
+ */
 
 import * as readline from 'node:readline';
 import type { IpcRequest, IpcResponse, IpcEvent } from './ipcProtocol.js';
 import { Bridge } from './bridge.js';
 
+/** Sidecar 協定版本；與 Rust `EXPECTED_SIDECAR_VERSION` 必須一致，否則
+ *  Rust 收到 `ready` event 會發 warning 告知使用者可能功能異常。 */
 const VERSION = '0.1.0';
 
 // ── Redirect console to stderr / IPC log events ──

@@ -1,3 +1,11 @@
+/**
+ * # AgentList — 代理列表容器
+ *
+ * 以 `useShallow` 只訂閱 `sessionIds` 陣列 — 單一 agent 的工具/狀態
+ * 變動不會讓列表本身重渲染。每個 [[AgentCard]] 用 `sessionId` 作 key
+ * 與 prop，內部獨立訂閱自己的 agent 資料。
+ */
+
 import { useShallow } from "zustand/react/shallow";
 import { useAgentStore } from "../stores/agentStore";
 import { AgentCard } from "./AgentCard";

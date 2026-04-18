@@ -1,3 +1,18 @@
+/**
+ * # useTerminal — xterm.js 生命週期
+ *
+ * 在 [[TerminalPanel]] 使用。封裝 xterm `Terminal` 與 `FitAddon` 實例
+ * 的建立、銷毀、尺寸計算。
+ *
+ * ## termEpoch
+ *
+ * 每次 instance 重建（StrictMode dispose → 重建；未來也可能用於 theme
+ * 切換觸發重建）會讓 `termEpoch` 遞增。下游 effect 應把 `termEpoch`
+ * 列入 deps 以便在 instance ready 後再執行 `terminal.open(container)`；
+ * 否則首次 mount 時 `getTerminal()` 可能為 null（hook useEffect 尚未執行），
+ * 下游 effect 跑完也不會再被觸發。
+ */
+
 import { useEffect, useRef, useCallback, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";

@@ -1,8 +1,22 @@
-// Runtime payload validators for sidecar events.
-//
-// Tauri 的 IPC 將 JSON 傳過來時 TS 型別是 `unknown`；過去程式碼用 `as {...}`
-// 強制轉型，任何格式錯誤都會 silent crash。改用純函式 type guard，
-// 讓 handler 在 payload 不合法時能優雅 skip 並記錄 warning。
+/**
+ * # Runtime payload validators
+ *
+ * Tauri invoke / listen 傳回的 payload TS 型別為 `unknown`；若直接用
+ * `as { sessionId: string }` 強制斷言，當 sidecar 因 bug 發出異常結構
+ * 時整個 handler 會 silent crash（下一行存取 `.sessionId` 得 `undefined`）。
+ *
+ * 本模組提供純函式 type guard，讓 handler 優雅處理：
+ *
+ * ```ts
+ * if (!isToolStartPayload(payload)) {
+ *   console.warn("invalid toolStart payload", payload);
+ *   break;
+ * }
+ * // 此後 payload 被 narrow 為 ToolStartPayload
+ * ```
+ *
+ * 另外提供 [[parseDesktopSettings]] 用於持久化 JSON schema 驗證。
+ */
 
 export function isString(v: unknown): v is string {
   return typeof v === "string";

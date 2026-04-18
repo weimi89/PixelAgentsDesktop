@@ -1,3 +1,25 @@
+/**
+ * # Settings store
+ *
+ * 使用者偏好設定；持久化於 `~/.pixel-agents/desktop-settings.json`，
+ * 由 Rust 的 `load_settings` / `save_settings` 命令讀寫。
+ *
+ * ## 寫入策略
+ *
+ * 所有變更都立刻 `set()` 到 store（UI 即時反應），但 **磁碟寫入與
+ * sidecar push 有 debounce**：
+ *
+ * - `schedulePersist` 250ms — 檔案系統寫入
+ * - `scheduleScanIntervalPush` / `scheduleExcludedPush` 300ms — IPC
+ *
+ * 避免滑桿拖動觸發每幀寫盤 + IPC（原本會導致視覺卡頓與磁碟 I/O 爆量）。
+ *
+ * ## Schema 驗證
+ *
+ * `loadSettings` 把 invoke 的 raw unknown 交給 [[parseDesktopSettings]]
+ * 驗證型別與範圍，回退到安全預設；使用者手動編輯 JSON 打錯不會讓 UI 崩潰。
+ */
+
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { parseDesktopSettings, DESKTOP_SETTINGS_DEFAULTS } from "../lib/validators";

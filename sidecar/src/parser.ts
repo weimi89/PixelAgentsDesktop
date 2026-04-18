@@ -1,12 +1,38 @@
-// ── JSONL Parser: extract AgentNodeEvents from Claude session JSONL lines ──
-// Adapted from web/agent-node/src/parser.ts for pixel-agents-desktop sidecar
+/**
+ * # JSONL 解析器 — Claude Code session → AgentNodeEvent
+ *
+ * Claude Code 將每個對話 turn 以 JSONL 形式寫入
+ * `~/.claude/projects/<hash>/<sessionId>.jsonl`。本模組將單行 record
+ * 轉為我們的事件模型：
+ *
+ * | Claude record.type           | 產出事件                             |
+ * |------------------------------|--------------------------------------|
+ * | `assistant` + `message.model`| `modelDetected`                      |
+ * | `assistant` 含 thinking block| `agentThinking`                      |
+ * | `assistant` 含 tool_use      | `toolStart` + `transcript`           |
+ * | `assistant` 純文字           | `transcript` (Responding...)         |
+ * | `user` 含 tool_result        | `toolDone`                           |
+ * | `user` 純文字                | `transcript` (user summary)          |
+ * | `progress` 子代理 tool_use   | `subtaskStart`                       |
+ * | `progress` 子代理 tool_result| `subtaskDone`                        |
+ * | `system.subtype=compact_boundary` | `agentEmote compress` + `transcript` |
+ * | `system.subtype=turn_duration`    | `turnComplete`                       |
+ *
+ * ## 容錯
+ *
+ * 所有 JSON 解析包在 try/catch；壞行返回空陣列不拋錯。這讓上游
+ * [[AgentTracker]] 在初始 replay 時若切到中間壞行也不會中斷主流程。
+ */
 
 import type { AgentNodeEvent } from '../../shared/protocol.js';
 import { formatToolStatus } from '../../shared/formatToolStatus.js';
 
 /**
- * 簡化版轉錄解析器 — 從單行 JSONL 提取事件。
- * 不管理計時器或伺服器狀態，僅產生事件流。
+ * 解析單行 Claude Code JSONL 為 `AgentNodeEvent` 陣列。
+ *
+ * @param sessionId - 所屬 session（會被填入每個產出事件）
+ * @param line - 單行 JSON 字串（已去掉換行）
+ * @returns 零或多個事件；解析失敗回傳空陣列
  */
 export function parseJsonlLine(sessionId: string, line: string): AgentNodeEvent[] {
 	const events: AgentNodeEvent[] = [];

@@ -1,5 +1,23 @@
+/**
+ * # Agent store
+ *
+ * 當前所有活躍的 Claude Code agent（由 sidecar 的 [[Scanner]] + [[AgentTracker]]
+ * 發現並透過 IPC 事件上行）。
+ *
+ * ## 設計要點
+ *
+ * - `agents` 以 `Map<sessionId, AgentInfo>` 存放，**每次變動產生新 Map 引用**
+ *   才能讓 Zustand selector 偵測到（shallow Object.is 比較）。
+ * - 單一 agent 的工具/狀態更新只會替換該 entry，其他 entry 物件保持同一
+ *   引用，配合 `AgentCard` 的 `useAgentStore((s) => s.agents.get(id))`
+ *   selector 可精準只讓當事 card 重渲染。
+ * - `AgentList` 則透過 `useShallow(Array.from(agents.keys()))` 訂閱 id 陣列，
+ *   單一 agent 的工具變動不觸發列表重建。
+ */
+
 import { create } from "zustand";
 
+/** Agent 忙碌狀態 — 有工具正在執行為 `active`，否則 `idle`。 */
 export type AgentStatus = "active" | "idle";
 
 export interface ToolInfo {

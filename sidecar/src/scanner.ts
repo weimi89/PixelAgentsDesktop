@@ -1,5 +1,23 @@
-// ── Scanner: discover active Claude sessions in ~/.claude/projects/ ──
-// Adapted from web/agent-node/src/scanner.ts for pixel-agents-desktop sidecar
+/**
+ * # Scanner — 發現活躍的 Claude Code session
+ *
+ * 每隔 `scanIntervalMs` 掃描 `~/.claude/projects/` 下所有 `.jsonl` 檔案。
+ * 判別規則：
+ *
+ * - `mtime` 距今小於 `activeMaxAgeMs`（預設 30 秒）視為活躍；若尚未追蹤
+ *   則呼叫 [[AgentTracker.startTracking]] 開始監視。
+ * - 曾活躍但 `lastActivity` 已超過 `staleTimeoutMs`（預設 10 分鐘）視為
+ *   結束，呼叫 [[AgentTracker.stopTracking]]。
+ *
+ * ## 效能考量
+ *
+ * 原版使用 `fs.readdirSync` + `fs.statSync`，50 個專案每秒 500 次同步 I/O
+ * 會阻塞 event loop。現已改用 `fs/promises`：
+ *
+ * - `readdir` 對所有專案目錄 `Promise.all` 並行
+ * - `stat` 以 [[runLimited]] 限制 16 並行度（避免 FD 耗盡）
+ * - `scanning` flag 重入保護，前次未完成時跳過新的 tick
+ */
 
 import * as fsp from 'fs/promises';
 import * as path from 'path';
@@ -7,7 +25,8 @@ import * as os from 'os';
 import type { AgentTracker } from './agentTracker.js';
 import { markAsync } from './perfMark.js';
 
-/** 並行 stat 的上限 — 避免一次打開太多檔案描述符。 */
+/** 並行 stat 上限。設太高會撞 OS 檔案描述符限制，太低退化為序列掃描。
+ *  16 在 macOS 預設 FD cap (4096) 下安全且足夠快。 */
 const STAT_CONCURRENCY = 16;
 
 /** JSONL 掃描配置 */

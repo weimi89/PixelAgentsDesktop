@@ -1,3 +1,20 @@
+/**
+ * # MainView — 已連線時的主介面
+ *
+ * Tab 結構：代理 / 終端機 / 日誌 / 設定。Terminal 以 `React.lazy`
+ * 動態載入（xterm.js ~300KB），其他三個 tab 首屏直接打包。
+ *
+ * ## 快捷鍵
+ *
+ * `useKeyboardShortcuts` 註冊 Cmd/Ctrl + 1~4 切 tab、Cmd/Ctrl + D 中斷連線；
+ * 輸入欄位中不攔截純數字。
+ *
+ * ## ARIA
+ *
+ * 採完整 WAI-ARIA tab pattern：`role="tablist"` / `role="tab"` /
+ * `aria-selected` / `aria-controls` / `role="tabpanel"`。
+ */
+
 import { Suspense, lazy, useMemo, useState } from "react";
 import { AgentList } from "./AgentList";
 import { LogViewer } from "./LogViewer";

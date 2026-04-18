@@ -1,3 +1,23 @@
+/**
+ * # ErrorBoundary — 頂層錯誤邊界
+ *
+ * React 16+ 的 `componentDidCatch` 機制，捕捉子元件 render / lifecycle
+ * 拋出的錯誤。顯示可讀的錯誤畫面取代白屏。
+ *
+ * ## class 元件限制
+ *
+ * React Hooks 無法在 class 元件使用。翻譯字典與主題色票改以
+ * `useLocaleStore.getState()` / `useThemeStore.getState()` 在 render 時
+ * 直接取靜態值 — 不對語言/主題切換做響應式更新（錯誤畫面出現頻率極低，
+ * 權衡之下可接受）。
+ *
+ * ## crash 持久化
+ *
+ * `componentDidCatch` 呼叫 [[reportCrash]] 把錯誤訊息 + stack +
+ * componentStack 寫到 `~/.pixel-agents/crashes/`；包含 diagnostics 快照
+ * 供事後分析。失敗不影響 UI 顯示。
+ */
+
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { useLocaleStore } from "../i18n";
 import { zhTW } from "../i18n/locales/zh-TW";

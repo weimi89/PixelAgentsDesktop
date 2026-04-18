@@ -1,60 +1,86 @@
+//! # NDJSON IPC 協定型別
+//!
+//! Rust 主程序與 Node.js sidecar 透過 stdin / stdout 交換訊息。每一行是
+//! 一個 JSON 物件（newline-delimited JSON），三種型別以**有無 `id` 欄位**
+//! 區分：
+//!
+//! | 方向            | 型別          | 判別            |
+//! |-----------------|---------------|-----------------|
+//! | Rust → Sidecar  | `IpcRequest`  | 有 `id+method`  |
+//! | Sidecar → Rust  | `IpcResponse` | 有 `id` 無 `method` |
+//! | Sidecar → Rust  | `IpcEvent`    | 無 `id` 有 `event`  |
+//!
+//! ## 序列化規則
+//!
+//! - `id`：`u64` 單調遞增，由 `SidecarManager.next_id` 產生；重啟 sidecar
+//!   不重置，避免跨 restart 的舊 response 誤配對。
+//! - `params` / `result` / `error` 缺省時不序列化（`skip_serializing_if`），
+//!   以縮短 NDJSON 行並節省 IPC buffer。
+//! - 序列化失敗目前視為 bug 而非 runtime 錯誤 — 所有欄位型別均已受 TS 端
+//!   ipcProtocol.ts 鏡射，若打破 schema 會在兩端都編譯失敗。
+
 use serde::{Deserialize, Serialize};
 
-// ---------------------------------------------------------------------------
-// NDJSON IPC protocol types
-//
-// Communication with the Node.js sidecar uses newline-delimited JSON over
-// stdin (requests) and stdout (responses / events).
-// ---------------------------------------------------------------------------
-
-/// A request sent from Rust to the Node.js sidecar via stdin.
+/// 從 Rust 發往 sidecar 的請求訊息。
+///
+/// 每個請求必須帶唯一的 [`id`](Self::id)，sidecar 回應時以同 `id` 填入
+/// [`IpcResponse`] 供 Rust 端配對 pending map 中的 oneshot sender。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IpcRequest {
-    /// Unique request identifier (monotonically increasing).
+    /// 單調遞增的請求識別碼。
     pub id: u64,
-    /// Method name, e.g. "connect", "disconnect", "getStatus".
+    /// 方法名稱，對應 sidecar `main.ts` 的 `switch (method)`，例如
+    /// `"connect"`、`"disconnect"`、`"getStatus"`、`"terminalAttach"`。
     pub method: String,
-    /// Optional JSON parameters for the method.
+    /// JSON 參數；可省略（sidecar 視方法而定接收或忽略）。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub params: Option<serde_json::Value>,
 }
 
-/// A response received from the sidecar, correlated by `id`.
+/// Sidecar 對某個 [`IpcRequest`] 的回應，以 `id` 配對。
+///
+/// `result` 與 `error` 二擇一；兩者皆缺席時視為 `null` 結果（由呼叫端
+/// 負責解讀是否合理）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IpcResponse {
-    /// Matches the request `id`.
+    /// 對應原 [`IpcRequest::id`]。
     pub id: u64,
-    /// Successful result payload (mutually exclusive with `error`).
+    /// 成功時的結果 JSON。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub result: Option<serde_json::Value>,
-    /// Error message if the request failed.
+    /// 失敗訊息。前端 UI 應直接向使用者呈現或轉為 log。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
 
-/// An unsolicited event pushed from the sidecar (no `id`).
+/// Sidecar 主動推送的事件，**無** `id`。
+///
+/// 常見 event 值見 sidecar `bridge.ts::handleAgentEvent`：
+/// `agentStarted` / `agentStopped` / `toolStart` / `toolDone` /
+/// `connectionStatus` / `terminalData` / `ready` / `log` 等。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IpcEvent {
-    /// Event name, e.g. "agentCreated", "agentClosed", "statusUpdate".
+    /// 事件類型字串。見 `src/tauri-api.ts::SidecarEventKind` 的完整列表。
     pub event: String,
-    /// Arbitrary event payload.
+    /// 事件 payload（任意 JSON）。
     pub data: serde_json::Value,
 }
 
-// ---------------------------------------------------------------------------
-// Helper functions (placeholders — will be implemented with actual sidecar I/O)
-// ---------------------------------------------------------------------------
-
-/// Serialize an `IpcRequest` to a single NDJSON line (with trailing newline).
+/// 將 [`IpcRequest`] 序列化為單行 NDJSON（含結尾 `\n`）。
+///
+/// 失敗時回傳 `serde_json::Error`；呼叫端 ([`crate::sidecar::SidecarManager::request`])
+/// 視為應用層錯誤並回傳給前端。
 pub fn encode_request(req: &IpcRequest) -> Result<String, serde_json::Error> {
     let mut line = serde_json::to_string(req)?;
     line.push('\n');
     Ok(line)
 }
 
-/// Try to parse a single line from stdout as either a response or an event.
+/// 解析 sidecar stdout 的單行 JSON 為 [`IpcMessage`]。
+///
+/// **判別規則**：若 JSON 物件含 `"id"` 欄位視為 [`IpcResponse`]，否則為
+/// [`IpcEvent`]。這是與 sidecar `main.ts::send` 的對稱約定。
 pub fn decode_line(line: &str) -> Result<IpcMessage, serde_json::Error> {
-    // If the JSON contains an "id" field it is a response; otherwise an event.
     let value: serde_json::Value = serde_json::from_str(line)?;
     if value.get("id").is_some() {
         let resp: IpcResponse = serde_json::from_value(value)?;
@@ -65,7 +91,7 @@ pub fn decode_line(line: &str) -> Result<IpcMessage, serde_json::Error> {
     }
 }
 
-/// Discriminated union for decoded stdout messages.
+/// [`decode_line`] 的 discriminated union 回傳值。
 #[derive(Debug, Clone)]
 pub enum IpcMessage {
     Response(IpcResponse),

@@ -1,7 +1,23 @@
-// System tray integration.
-//
-// Provides tray icon with context menu, minimize-to-tray behavior,
-// and dynamic status updates (connection state + agent count).
+//! # 系統匣整合
+//!
+//! 提供常駐系統匣圖示與右鍵選單，是應用的主要操作入口（關閉視窗只是隱藏；
+//! 真正結束必須從系統匣選單觸發）。
+//!
+//! ## 選單項目
+//!
+//! | id             | 行為                          | 啟用狀態      |
+//! |----------------|-------------------------------|---------------|
+//! | `show_hide`    | 顯示/隱藏主視窗               | 啟用          |
+//! | `status`       | 顯示連線狀態（只讀）          | `disabled=true` |
+//! | `agents`       | 顯示代理數量（只讀）          | `disabled=true` |
+//! | `quit`         | 結束應用                      | 啟用          |
+//!
+//! ## 動態更新
+//!
+//! [`update_tray_status`] 由 [`crate::sidecar`] 的 reader task 在每個
+//! tray-relevant event 後呼叫。為避免 race，`status_item` / `agents_item`
+//! 實例以 [`tauri::Manager::manage`] 存為 [`TrayMenuItems`] 供後續以
+//! `set_text` 動態修改文字。
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};

@@ -1,3 +1,27 @@
+/**
+ * # i18n — 輕量自製翻譯層
+ *
+ * 不引入 `react-i18next`（對此應用過重）。以 `zh-TW.ts` 為主字典定義
+ * 結構，`en.ts` / `ja.ts` 以 `DeepString<typeof zhTW>` 型別強制結構相同；
+ * 漏翻譯會在 `tests/i18n.test.ts` 測試失敗。
+ *
+ * ## 用法
+ *
+ * ```tsx
+ * const t = useTranslation();
+ * return <h1>{t("login.subtitle")}</h1>;
+ * return <p>{t("agents.timeSecondsAgo", { n: 5 })}</p>;  // 插值
+ * ```
+ *
+ * 非 React context（例如 `App.tsx` 的 `handleSidecarEvent` 全域函式）
+ * 應直接 `useLocaleStore.getState().locale` 取對應字典。
+ *
+ * ## fallback
+ *
+ * 若當前語言的 key 缺失會 fallback 回繁中字典；兩邊都沒才返回 key 本身
+ * 並 `console.warn`。
+ */
+
 import { create } from "zustand";
 import { zhTW, type Dictionary } from "./locales/zh-TW";
 import { en } from "./locales/en";
