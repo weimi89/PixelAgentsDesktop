@@ -15,6 +15,38 @@ const DEFAULT_SETTINGS: DesktopSettings = {
   startMinimized: false,
 };
 
+/** Debounce 寫盤 / IPC — 滑桿拖動等連續操作不應觸發多次磁碟寫入。 */
+const PERSIST_DEBOUNCE_MS = 250;
+const SIDECAR_PUSH_DEBOUNCE_MS = 300;
+
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+let scanIntervalPushTimer: ReturnType<typeof setTimeout> | null = null;
+let excludedPushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function schedulePersist(snapshot: DesktopSettings): void {
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    void persistSettings(snapshot);
+  }, PERSIST_DEBOUNCE_MS);
+}
+
+function scheduleScanIntervalPush(intervalMs: number): void {
+  if (scanIntervalPushTimer) clearTimeout(scanIntervalPushTimer);
+  scanIntervalPushTimer = setTimeout(() => {
+    scanIntervalPushTimer = null;
+    void invoke("update_scan_interval", { intervalMs }).catch(() => {});
+  }, SIDECAR_PUSH_DEBOUNCE_MS);
+}
+
+function scheduleExcludedPush(projects: string[]): void {
+  if (excludedPushTimer) clearTimeout(excludedPushTimer);
+  excludedPushTimer = setTimeout(() => {
+    excludedPushTimer = null;
+    void invoke("update_excluded_projects", { projects }).catch(() => {});
+  }, SIDECAR_PUSH_DEBOUNCE_MS);
+}
+
 interface SettingsState extends DesktopSettings {
   loaded: boolean;
 
@@ -34,10 +66,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   setScanInterval: (ms: number) => {
     set({ scanIntervalMs: ms });
-    // Fire-and-forget save + sidecar update
-    const state = get();
-    void persistSettings(state);
-    void invoke("update_scan_interval", { intervalMs: ms }).catch(() => {});
+    schedulePersist(snapshotFromState(get()));
+    scheduleScanIntervalPush(ms);
   },
 
   addExcludedProject: (project: string) => {
@@ -45,27 +75,25 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     if (current.includes(project)) return;
     const updated = [...current, project];
     set({ excludedProjects: updated });
-    const state = get();
-    void persistSettings(state);
-    void invoke("update_excluded_projects", { projects: updated }).catch(() => {});
+    schedulePersist(snapshotFromState(get()));
+    scheduleExcludedPush(updated);
   },
 
   removeExcludedProject: (project: string) => {
     const updated = get().excludedProjects.filter((p) => p !== project);
     set({ excludedProjects: updated });
-    const state = get();
-    void persistSettings(state);
-    void invoke("update_excluded_projects", { projects: updated }).catch(() => {});
+    schedulePersist(snapshotFromState(get()));
+    scheduleExcludedPush(updated);
   },
 
   setAutoStart: (enabled: boolean) => {
     set({ autoStart: enabled });
-    void persistSettings(get());
+    schedulePersist(snapshotFromState(get()));
   },
 
   setStartMinimized: (enabled: boolean) => {
     set({ startMinimized: enabled });
-    void persistSettings(get());
+    schedulePersist(snapshotFromState(get()));
   },
 
   loadSettings: async () => {
@@ -88,17 +116,20 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   saveSettings: async () => {
-    await persistSettings(get());
+    await persistSettings(snapshotFromState(get()));
   },
 }));
 
-async function persistSettings(state: SettingsState): Promise<void> {
-  const settings: DesktopSettings = {
+function snapshotFromState(state: SettingsState): DesktopSettings {
+  return {
     scanIntervalMs: state.scanIntervalMs,
     excludedProjects: state.excludedProjects,
     autoStart: state.autoStart,
     startMinimized: state.startMinimized,
   };
+}
+
+async function persistSettings(settings: DesktopSettings): Promise<void> {
   try {
     await invoke("save_settings", { settings });
   } catch (err) {

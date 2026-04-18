@@ -202,9 +202,8 @@ export function SettingsView() {
   // Load username from config
   useEffect(() => {
     void loadConfig().then((config) => {
-      // The config may have a username field from login response
-      // For now just show server URL
-      setConfigUsername(config?.server_url ? "connected" : null);
+      // Rust writes { server, token }; show connection flag based on `server`.
+      setConfigUsername(config?.server ? "connected" : null);
     }).catch(() => {});
   }, []);
 

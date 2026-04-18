@@ -147,11 +147,12 @@ export function LoginView() {
       if (authMode === "apikey") {
         token = apiKey.trim();
       } else {
-        token = await loginServer(
+        const resp = await loginServer(
           serverUrl.trim(),
           username.trim(),
-          password
+          password,
         );
+        token = resp.token;
       }
 
       await connectServer(serverUrl.trim(), token);

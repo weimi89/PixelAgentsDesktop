@@ -1,66 +1,95 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-// --- Invoke wrappers (typed) ---
+// --- Status ---
+//
+// Rust `get_status` returns either:
+//   { sidecarStatus: "stopped", connected, agentCount, latency }   — when sidecar is down
+//   sidecar's getStatus response:  { sidecarVersion, connected, agents: [...] }
+// The shape depends on whether the sidecar is running, so we type loosely.
 
 export interface StatusResponse {
-  sidecar_running: boolean;
   connected: boolean;
-  agent_count: number;
-  uptime_secs: number;
+  agentCount?: number;
+  sidecarStatus?: string;
+  sidecarVersion?: string;
+  agents?: Array<{ sessionId: string; projectName: string }>;
+  latency?: number;
 }
 
 export async function getStatus(): Promise<StatusResponse> {
   return invoke<StatusResponse>("get_status");
 }
 
+// --- Connection ---
+
 export async function connect(
   serverUrl: string,
   token: string,
 ): Promise<void> {
-  return invoke("connect", { serverUrl, token });
+  await invoke("connect_server", { serverUrl, token });
 }
 
 export async function disconnect(): Promise<void> {
-  return invoke("disconnect");
+  await invoke("disconnect_server");
+}
+
+// --- Login ---
+
+export interface LoginResponse {
+  ok: boolean;
+  token: string;
+  username: string;
 }
 
 export async function loginServer(
   serverUrl: string,
   username: string,
   password: string,
-): Promise<string> {
-  return invoke<string>("login_server", { serverUrl, username, password });
+): Promise<LoginResponse> {
+  return invoke<LoginResponse>("login_server", { serverUrl, username, password });
 }
 
+export async function loginWithKey(
+  serverUrl: string,
+  apiKey: string,
+): Promise<LoginResponse> {
+  return invoke<LoginResponse>("login_with_key", { serverUrl, apiKey });
+}
+
+// --- Config ---
+//
+// Rust writes { server, token } — keep these exact field names to match
+// config_path() in commands.rs.
+
 export interface AppConfig {
-  server_url?: string;
+  server?: string;
   token?: string;
 }
 
-export async function loadConfig(): Promise<AppConfig> {
-  return invoke<AppConfig>("load_config");
+export async function loadConfig(): Promise<AppConfig | null> {
+  return invoke<AppConfig | null>("load_config");
 }
 
-export async function saveConfig(config: AppConfig): Promise<void> {
-  return invoke("save_config", { config });
+export async function saveConfig(serverUrl: string, token: string): Promise<void> {
+  await invoke("save_config", { serverUrl, token });
 }
 
-// --- Terminal invoke wrappers ---
+// --- Terminal ---
 
 export async function terminalAttach(
   sessionId: string,
   cols: number,
   rows: number,
 ): Promise<void> {
-  return invoke("terminal_attach", { sessionId, cols, rows });
+  await invoke("terminal_attach", { sessionId, cols, rows });
 }
 
 export async function terminalInput(
   sessionId: string,
   data: string,
 ): Promise<void> {
-  return invoke("terminal_input", { sessionId, data });
+  await invoke("terminal_input", { sessionId, data });
 }
 
 export async function terminalResize(
@@ -68,14 +97,14 @@ export async function terminalResize(
   cols: number,
   rows: number,
 ): Promise<void> {
-  return invoke("terminal_resize", { sessionId, cols, rows });
+  await invoke("terminal_resize", { sessionId, cols, rows });
 }
 
 export async function terminalDetach(sessionId: string): Promise<void> {
-  return invoke("terminal_detach", { sessionId });
+  await invoke("terminal_detach", { sessionId });
 }
 
-// --- Settings invoke wrappers ---
+// --- Settings ---
 
 export interface DesktopSettings {
   scanIntervalMs: number;
@@ -89,50 +118,68 @@ export async function loadSettings(): Promise<DesktopSettings | null> {
 }
 
 export async function saveSettings(settings: DesktopSettings): Promise<void> {
-  return invoke("save_settings", { settings });
+  await invoke("save_settings", { settings });
 }
 
 export async function updateScanInterval(intervalMs: number): Promise<void> {
-  return invoke("update_scan_interval", { intervalMs });
+  await invoke("update_scan_interval", { intervalMs });
 }
 
 export async function updateExcludedProjects(projects: string[]): Promise<void> {
-  return invoke("update_excluded_projects", { projects });
+  await invoke("update_excluded_projects", { projects });
 }
 
 export async function logout(): Promise<void> {
-  return invoke("logout");
+  await invoke("logout");
 }
 
 // --- Event listeners ---
+//
+// SidecarEventKind lists every event `event` value that the sidecar emits
+// (see bridge.ts handleAgentEvent and main.ts sendEvent calls).
 
 export type SidecarEventKind =
+  // Connection lifecycle (legacy + current)
   | "connected"
   | "disconnected"
+  | "connectionStatus"
+  // Agent lifecycle
   | "agent_created"
   | "agent_closed"
-  | "agent_tool_start"
-  | "agent_tool_done"
-  | "agent_status"
-  | "latency"
-  | "error"
-  // Aliases for server-side naming conventions
   | "agentStarted"
   | "agentStopped"
+  // Tool lifecycle
+  | "agent_tool_start"
+  | "agent_tool_done"
   | "toolStart"
   | "toolDone"
-  | "connectionStatus"
+  | "subtaskStart"
+  | "subtaskDone"
+  // Agent state
+  | "agent_status"
+  | "statusChange"
+  | "agentThinking"
+  | "agentEmote"
+  | "modelDetected"
+  | "turnComplete"
   | "transcript"
-  // Terminal events
+  // Latency / diagnostics
+  | "latency"
+  | "error"
+  | "log"
+  | "ready"
+  // Terminal
   | "terminalData"
   | "terminalReady"
   | "terminalExit";
 
 export interface SidecarEvent {
-  kind: SidecarEventKind;
-  payload: unknown;
-  // Raw fields from Rust IpcEvent (event/data)
-  event?: string;
+  // When the Rust side forwards IpcEvent, Tauri serialises as { event, data }.
+  // `kind`/`payload` are the older field names kept for backwards-compat in
+  // the handler switch.
+  kind?: SidecarEventKind;
+  payload?: unknown;
+  event?: SidecarEventKind;
   data?: unknown;
 }
 
@@ -144,28 +191,16 @@ export async function onSidecarEvent(
   });
 }
 
-export async function onConnectionChange(
-  callback: (connected: boolean) => void,
-): Promise<UnlistenFn> {
-  return listen<boolean>("connection-change", (event) => {
-    callback(event.payload);
-  });
-}
-
 /**
- * Set up all event listeners. Returns a cleanup function.
+ * Set up event listeners. Returns a cleanup function.
  */
 export async function setupEventListeners(handlers: {
   onSidecar?: (event: SidecarEvent) => void;
-  onConnection?: (connected: boolean) => void;
 }): Promise<() => void> {
   const unlisteners: UnlistenFn[] = [];
 
   if (handlers.onSidecar) {
     unlisteners.push(await onSidecarEvent(handlers.onSidecar));
-  }
-  if (handlers.onConnection) {
-    unlisteners.push(await onConnectionChange(handlers.onConnection));
   }
 
   return () => {

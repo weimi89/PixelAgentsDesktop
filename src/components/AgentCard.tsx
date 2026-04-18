@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { AgentInfo, ToolInfo } from "../stores/agentStore";
+import { useTick } from "../hooks/useTick";
 
 const TOOL_COLORS: Record<string, string> = {
   // File operations — blue
@@ -57,12 +58,8 @@ function truncateSessionId(sessionId: string): string {
 
 function ToolBadge({ tool }: { tool: ToolInfo }) {
   const color = getToolColor(tool.toolName);
-  const [, setTick] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(interval);
-  }, []);
+  // 訂閱共用 tick — 所有 Badge 同步每秒重新渲染，不各自建立 setInterval
+  useTick();
 
   return (
     <span
@@ -135,14 +132,8 @@ const styles = {
 
 export function AgentCard({ agent }: { agent: AgentInfo }) {
   const [hovered, setHovered] = useState(false);
-  const [, setTick] = useState(0);
-
-  // Update "time since" display
-  useEffect(() => {
-    if (agent.tools.length > 0) return; // ToolBadge handles its own ticking
-    const interval = setInterval(() => setTick((t) => t + 1), 5000);
-    return () => clearInterval(interval);
-  }, [agent.tools.length]);
+  // 訂閱共用 tick 讓「最後活動: N 秒前」能每秒刷新（原本每 5s，略為頻繁但足夠便宜）
+  useTick();
 
   return (
     <div

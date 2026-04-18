@@ -25,7 +25,12 @@ function handleSidecarEvent(event: SidecarEvent) {
     useAgentStore.getState();
   const { addLog } = useLogStore.getState();
 
-  switch (event.kind) {
+  // Rust 發 IpcEvent 序列化為 { event, data }；舊程式碼使用 { kind, payload }。
+  // 以 fallback 形式同時支援兩者，避免 Rust 端欄位改名時事件全部失效。
+  const kind = (event.kind ?? event.event) as SidecarEvent["kind"];
+  const payload = (event.payload ?? event.data ?? {}) as Record<string, unknown>;
+
+  switch (kind) {
     case "connected":
       setStatus("connected");
       setError(null);
@@ -40,7 +45,7 @@ function handleSidecarEvent(event: SidecarEvent) {
 
     case "agent_created":
     case "agentStarted": {
-      const p = event.payload as {
+      const p = payload as {
         sessionId: string;
         projectName: string;
       };
@@ -63,7 +68,7 @@ function handleSidecarEvent(event: SidecarEvent) {
 
     case "agent_closed":
     case "agentStopped": {
-      const p = event.payload as { sessionId: string };
+      const p = payload as { sessionId: string };
       removeAgent(p.sessionId);
       addLog({
         timestamp: Date.now(),
@@ -77,7 +82,7 @@ function handleSidecarEvent(event: SidecarEvent) {
 
     case "agent_tool_start":
     case "toolStart": {
-      const p = event.payload as {
+      const p = payload as {
         sessionId: string;
         toolId?: string;
         toolName: string;
@@ -102,7 +107,7 @@ function handleSidecarEvent(event: SidecarEvent) {
 
     case "agent_tool_done":
     case "toolDone": {
-      const p = event.payload as {
+      const p = payload as {
         sessionId: string;
         toolId?: string;
         toolName?: string;
@@ -131,7 +136,7 @@ function handleSidecarEvent(event: SidecarEvent) {
     }
 
     case "agent_status": {
-      const p = event.payload as {
+      const p = payload as {
         sessionId: string;
         status: "active" | "idle";
       };
@@ -141,7 +146,7 @@ function handleSidecarEvent(event: SidecarEvent) {
     }
 
     case "connectionStatus": {
-      const p = event.payload as { connected: boolean };
+      const p = payload as { connected: boolean };
       setStatus(p.connected ? "connected" : "disconnected");
       if (!p.connected) {
         clearAgents();
@@ -156,7 +161,7 @@ function handleSidecarEvent(event: SidecarEvent) {
     }
 
     case "transcript": {
-      const p = event.payload as {
+      const p = payload as {
         sessionId?: string;
         summary?: string;
         message?: string;
@@ -172,13 +177,13 @@ function handleSidecarEvent(event: SidecarEvent) {
     }
 
     case "latency": {
-      const p = event.payload as { ms: number };
+      const p = payload as { ms: number };
       setLatency(p.ms);
       break;
     }
 
     case "error": {
-      const p = event.payload as { message: string };
+      const p = payload as { message: string };
       setError(p.message);
       addLog({
         timestamp: Date.now(),
@@ -196,7 +201,7 @@ function handleSidecarEvent(event: SidecarEvent) {
       break;
 
     case "terminalReady": {
-      const p = event.payload as { sessionId: string };
+      const p = payload as { sessionId: string };
       addLog({
         timestamp: Date.now(),
         level: "info",
@@ -208,7 +213,7 @@ function handleSidecarEvent(event: SidecarEvent) {
     }
 
     case "terminalExit": {
-      const p = event.payload as { sessionId: string; code?: number };
+      const p = payload as { sessionId: string; code?: number };
       addLog({
         timestamp: Date.now(),
         level: "warn",
@@ -235,13 +240,6 @@ function App() {
 
     setupEventListeners({
       onSidecar: handleSidecarEvent,
-      onConnection: (connected) => {
-        const { setStatus } = useConnectionStore.getState();
-        setStatus(connected ? "connected" : "disconnected");
-        if (!connected) {
-          useAgentStore.getState().clearAgents();
-        }
-      },
     }).then((fn) => {
       cleanup = fn;
     });
