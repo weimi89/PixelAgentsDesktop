@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { useLocaleStore } from "../i18n";
 import { zhTW } from "../i18n/locales/zh-TW";
 import { en } from "../i18n/locales/en";
+import { reportCrash } from "../tauri-api";
 
 interface Props {
   children: ReactNode;
@@ -73,8 +74,14 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
-    // 輸出到 stderr；Tauri 側 env_logger 會寫入系統日誌
+    // 輸出到 stderr；Tauri 側 tracing subscriber 會寫入系統日誌
     console.error("[ErrorBoundary] Uncaught error:", error, info.componentStack);
+    // 持久化到磁碟以便使用者稍後回報；失敗不影響 UI 顯示
+    void reportCrash("react-uncaught", error.message, {
+      name: error.name,
+      stack: error.stack,
+      componentStack: info.componentStack,
+    });
   }
 
   private handleReload = (): void => {

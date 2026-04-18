@@ -1,9 +1,12 @@
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, useMemo, useState } from "react";
 import { AgentList } from "./AgentList";
 import { LogViewer } from "./LogViewer";
 import { SettingsView } from "./SettingsView";
 import { StatusBar } from "./StatusBar";
 import { useTranslation } from "../i18n";
+import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
+import { useConnectionStore } from "../stores/connectionStore";
+import { disconnect as invokeDisconnect } from "../tauri-api";
 
 // TerminalPanel 引入 xterm.js（~200KB），僅在使用者切到「終端機」分頁時才載入，
 // 其他分頁啟動時不需等待 xterm 下載與初始化。
@@ -72,6 +75,27 @@ export function MainView() {
     { id: "logs", label: t("tabs.logs") },
     { id: "settings", label: t("tabs.settings") },
   ];
+
+  // 全域鍵盤快捷鍵：Cmd/Ctrl + 1~4 切 tab、Cmd/Ctrl + D 中斷連線
+  const shortcuts = useMemo(
+    () => [
+      { mod: true, key: "1", action: () => setActiveTab("agents"), description: "代理" },
+      { mod: true, key: "2", action: () => setActiveTab("terminal"), description: "終端機" },
+      { mod: true, key: "3", action: () => setActiveTab("logs"), description: "日誌" },
+      { mod: true, key: "4", action: () => setActiveTab("settings"), description: "設定" },
+      {
+        mod: true,
+        key: "d",
+        action: () => {
+          void invokeDisconnect().catch(() => {});
+          useConnectionStore.getState().reset();
+        },
+        description: "中斷連線",
+      },
+    ],
+    [],
+  );
+  useKeyboardShortcuts(shortcuts);
 
   const renderContent = () => {
     switch (activeTab) {

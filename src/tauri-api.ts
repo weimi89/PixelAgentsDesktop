@@ -156,6 +156,19 @@ export async function getDiagnostics(): Promise<DiagnosticsSnapshot> {
   return invoke<DiagnosticsSnapshot>("get_diagnostics");
 }
 
+/** 將錯誤持久化到 ~/.pixel-agents/crashes/ 供後續回報使用 */
+export async function reportCrash(
+  kind: string,
+  message: string,
+  details?: unknown,
+): Promise<void> {
+  try {
+    await invoke("report_crash", { kind, message, details });
+  } catch {
+    // 寫入失敗絕不能遞迴 throw — 吞下以避免 ErrorBoundary 迴圈
+  }
+}
+
 // --- Event listeners ---
 //
 // SidecarEventKind lists every event `event` value that the sidecar emits

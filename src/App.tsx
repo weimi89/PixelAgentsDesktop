@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useConnectionStore } from "./stores/connectionStore";
 import { useAgentStore } from "./stores/agentStore";
 import { useLogStore } from "./stores/logStore";
-import { setupEventListeners, type SidecarEvent } from "./tauri-api";
+import { setupEventListeners, reportCrash, type SidecarEvent } from "./tauri-api";
 import { LoginView } from "./components/LoginView";
 import { MainView } from "./components/MainView";
 import { NoticeBanner } from "./components/NoticeBanner";
@@ -292,6 +292,10 @@ function App() {
           source: "sidecar",
           message: evt.message,
         });
+        // 嚴重情況（fatal）持久化到 crash 目錄
+        if (evt.fatal) {
+          void reportCrash("sidecar-fatal", evt.message, evt);
+        }
       },
     }).then((fn) => {
       cleanup = fn;

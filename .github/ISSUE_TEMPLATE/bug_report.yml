@@ -1,0 +1,83 @@
+name: 🐛 Bug 回報
+description: 回報應用程式中的錯誤
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感謝您協助改善 Pixel Agents Desktop！請盡量提供詳細資訊以便我們複現問題。
+
+  - type: input
+    id: version
+    attributes:
+      label: 應用版本
+      description: "見「設定 → 關於 → 版本」"
+      placeholder: "例：0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: 作業系統
+      options:
+        - macOS
+        - Windows
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: 作業系統版本
+      placeholder: "例：macOS 14.3 / Windows 11 23H2 / Ubuntu 22.04"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 問題描述
+      description: 清楚描述您遇到的問題
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 重現步驟
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 預期行為
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 實際行為
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 診斷資訊
+      description: "從「設定 → 診斷」複製數值（uptime、IPC 計數、sidecar 重啟/崩潰次數）"
+      render: text
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日誌 / 堆疊追蹤
+      description: 從「日誌」分頁匯出的 JSON 或錯誤訊息
+      render: text

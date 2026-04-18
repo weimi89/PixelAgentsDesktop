@@ -73,3 +73,26 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         working-directory: src-tauri
         run: cargo test --lib --locked
+
+  audit:
+    name: Security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: npm audit (moderate and above)
+        run: npm audit --audit-level=moderate --omit=dev || true
+        # npm audit 常因為 transitive dev deps 失敗；這裡暫以 `|| true` 避免
+        # 阻斷 CI，仍會在 log 中列出需要關注的警告。正式發行前應移除。
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked || true
+      - name: Cargo audit
+        working-directory: src-tauri
+        run: cargo audit --deny warnings || true

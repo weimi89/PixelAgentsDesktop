@@ -13,6 +13,74 @@ pub async fn get_diagnostics() -> Result<Value, String> {
     Ok(diagnostics::snapshot())
 }
 
+/// 將 crash / 錯誤事件寫入 ~/.pixel-agents/crashes/<timestamp>.json，
+/// 最多保留 20 份，舊的自動搬移至同目錄的 .archive 子資料夾，
+/// 而不直接刪除（符合專案檔案整理規則）。
+#[tauri::command]
+pub async fn report_crash(kind: String, message: String, details: Option<Value>) -> Result<Value, String> {
+    let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
+    let crash_dir = home.join(".pixel-agents").join("crashes");
+    fs::create_dir_all(&crash_dir)
+        .map_err(|e| format!("Failed to create crash dir: {e}"))?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let file_name = format!("{}-{}.json", now, sanitize(&kind));
+    let path = crash_dir.join(&file_name);
+
+    let record = json!({
+        "timestamp": now,
+        "kind": kind,
+        "message": message,
+        "details": details,
+        "appVersion": env!("CARGO_PKG_VERSION"),
+        "os": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+        "diagnostics": diagnostics::snapshot(),
+    });
+    let content = serde_json::to_string_pretty(&record)
+        .map_err(|e| format!("Serialize error: {e}"))?;
+    fs::write(&path, content).map_err(|e| format!("Failed to write crash log: {e}"))?;
+
+    // 保留最多 20 筆；更舊的搬到 archive/
+    rotate_crash_logs(&crash_dir).ok();
+
+    tracing::warn!(kind, path = %path.display(), "crash reported");
+    Ok(json!({ "ok": true, "path": path.to_string_lossy() }))
+}
+
+fn sanitize(s: &str) -> String {
+    s.chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .collect()
+}
+
+fn rotate_crash_logs(dir: &std::path::Path) -> std::io::Result<()> {
+    const MAX_ACTIVE: usize = 20;
+    let mut entries: Vec<_> = fs::read_dir(dir)?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.file_type().ok().map(|t| t.is_file()).unwrap_or(false)
+                && e.path().extension().and_then(|x| x.to_str()) == Some("json")
+        })
+        .collect();
+    entries.sort_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
+
+    if entries.len() <= MAX_ACTIVE {
+        return Ok(());
+    }
+    let archive = dir.join("archive");
+    fs::create_dir_all(&archive)?;
+    let overflow = entries.len() - MAX_ACTIVE;
+    for e in entries.into_iter().take(overflow) {
+        let target = archive.join(e.file_name());
+        fs::rename(e.path(), target)?;
+    }
+    Ok(())
+}
+
 /// Build the shared HTTP client used for login & other REST calls.
 fn build_http_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
