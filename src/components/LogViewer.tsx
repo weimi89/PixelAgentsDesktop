@@ -218,35 +218,35 @@ export function LogViewer() {
   return (
     <div style={styles.container}>
       <div style={styles.filterBar}>
-        <span style={styles.filterLabel}>Level:</span>
+        <span style={styles.filterLabel}>等級:</span>
         <select
           style={styles.select}
           value={levelFilter}
           onChange={(e) => setLevelFilter(e.target.value as LogLevel | "")}
         >
-          <option value="">All</option>
-          <option value="info">Info</option>
-          <option value="warn">Warn</option>
-          <option value="error">Error</option>
-          <option value="debug">Debug</option>
+          <option value="">全部</option>
+          <option value="info">資訊</option>
+          <option value="warn">警告</option>
+          <option value="error">錯誤</option>
+          <option value="debug">除錯</option>
         </select>
 
-        <span style={styles.filterLabel}>Source:</span>
+        <span style={styles.filterLabel}>來源:</span>
         <input
           style={styles.input}
           type="text"
-          placeholder="Filter source..."
+          placeholder="篩選來源..."
           value={sourceFilter}
           onChange={(e) => setSourceFilter(e.target.value)}
         />
 
-        <span style={styles.filterLabel}>Agent:</span>
+        <span style={styles.filterLabel}>代理:</span>
         <select
           style={styles.select}
           value={agentFilter}
           onChange={(e) => setAgentFilter(e.target.value)}
         >
-          <option value="">All</option>
+          <option value="">全部</option>
           {agentList.map((a) => (
             <option key={a.sessionId} value={a.sessionId}>
               {a.projectName || a.sessionId.slice(0, 8)}
@@ -255,22 +255,22 @@ export function LogViewer() {
         </select>
 
         <button style={styles.button} onClick={handleClearFilters}>
-          Clear Filters
+          清除篩選
         </button>
 
         <div style={styles.spacer} />
 
         <button style={styles.button} onClick={handleExport}>
-          Export
+          匯出
         </button>
         <button style={styles.buttonDanger} onClick={clearLogs}>
-          Clear Logs
+          清除日誌
         </button>
       </div>
 
       <div style={{ ...styles.listContainer, position: "relative" }}>
         {filteredLogs.length === 0 ? (
-          <div style={styles.empty}>No log entries</div>
+          <div style={styles.empty}>無日誌記錄</div>
         ) : (
           <>
             <Virtuoso
@@ -283,7 +283,7 @@ export function LogViewer() {
             />
             {!atBottom && (
               <button style={styles.scrollButton} onClick={scrollToBottom}>
-                Scroll to bottom
+                捲動至底部
               </button>
             )}
           </>

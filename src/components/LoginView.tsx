@@ -178,10 +178,10 @@ export function LoginView() {
     <div style={styles.container}>
       <div style={styles.card}>
         <h1 style={styles.title}>Pixel Agents</h1>
-        <p style={styles.subtitle}>Connect to your server</p>
+        <p style={styles.subtitle}>連線至伺服器</p>
 
         <div style={styles.fieldGroup}>
-          <label style={styles.label}>Server URL</label>
+          <label style={styles.label}>伺服器網址</label>
           <input
             style={styles.input}
             type="text"
@@ -199,24 +199,24 @@ export function LoginView() {
             onClick={() => setAuthMode("apikey")}
             disabled={loading}
           >
-            API Key
+            API 金鑰
           </button>
           <button
             style={styles.modeButton(authMode === "password")}
             onClick={() => setAuthMode("password")}
             disabled={loading}
           >
-            Password
+            密碼
           </button>
         </div>
 
         {authMode === "apikey" ? (
           <div style={styles.fieldGroup}>
-            <label style={styles.label}>API Key</label>
+            <label style={styles.label}>API 金鑰</label>
             <input
               style={styles.input}
               type="password"
-              placeholder="Enter your API key"
+              placeholder=""
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -226,11 +226,11 @@ export function LoginView() {
         ) : (
           <>
             <div style={styles.fieldGroup}>
-              <label style={styles.label}>Username</label>
+              <label style={styles.label}>使用者名稱</label>
               <input
                 style={styles.input}
                 type="text"
-                placeholder="admin"
+                placeholder=""
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -238,11 +238,11 @@ export function LoginView() {
               />
             </div>
             <div style={styles.fieldGroup}>
-              <label style={styles.label}>Password</label>
+              <label style={styles.label}>密碼</label>
               <input
                 style={styles.input}
                 type="password"
-                placeholder="Enter password"
+                placeholder=""
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -264,10 +264,10 @@ export function LoginView() {
           {loading ? (
             <>
               <span style={styles.spinner}>&#9696;</span>
-              Connecting...
+              連線中...
             </>
           ) : (
-            "Connect"
+            "連線"
           )}
         </button>
 

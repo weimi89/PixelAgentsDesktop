@@ -87,7 +87,9 @@ export function StatusBar() {
     <div style={styles.bar}>
       <div style={styles.statusGroup}>
         <span style={styles.indicator(indicatorColor)} />
-        <span style={styles.value}>{status}</span>
+        <span style={styles.value}>
+          {status === "connected" ? "已連線" : status === "connecting" ? "連線中" : "未連線"}
+        </span>
       </div>
 
       {status === "connected" && serverUrl && (
@@ -95,14 +97,14 @@ export function StatusBar() {
       )}
 
       <span>
-        <span style={styles.label}>Latency: </span>
+        <span style={styles.label}>延遲: </span>
         <span style={styles.value}>
           {latency > 0 ? `${latency}ms` : "--"}
         </span>
       </span>
 
       <span>
-        <span style={styles.label}>Agents: </span>
+        <span style={styles.label}>代理: </span>
         <span style={styles.value}>{agentCount}</span>
       </span>
 
@@ -112,7 +114,7 @@ export function StatusBar() {
 
       {status === "connected" && (
         <button style={styles.disconnectButton} onClick={handleDisconnect}>
-          Disconnect
+          中斷連線
         </button>
       )}
     </div>

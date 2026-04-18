@@ -8,10 +8,10 @@ import { StatusBar } from "./StatusBar";
 type TabId = "agents" | "terminal" | "logs" | "settings";
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: "agents", label: "Agents" },
-  { id: "terminal", label: "Terminal" },
-  { id: "logs", label: "Logs" },
-  { id: "settings", label: "Settings" },
+  { id: "agents", label: "代理" },
+  { id: "terminal", label: "終端機" },
+  { id: "logs", label: "日誌" },
+  { id: "settings", label: "設定" },
 ];
 
 const styles = {

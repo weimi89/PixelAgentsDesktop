@@ -39,9 +39,9 @@ export function AgentList() {
       <div style={styles.empty}>
         <div style={styles.emptyIcon}>[  ]</div>
         <div style={styles.emptyText}>
-          No agents detected yet.
+          尚未偵測到代理。
           <br />
-          Waiting for Claude Code sessions...
+          等待 Claude Code 工作階段...
         </div>
       </div>
     );

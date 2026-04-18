@@ -255,30 +255,30 @@ export function SettingsView() {
     <div style={styles.container}>
       {/* Connection Section */}
       <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>Connection</h3>
+        <h3 style={styles.sectionTitle}>連線</h3>
         <div style={styles.row}>
-          <span style={styles.label}>Server URL</span>
-          <span style={styles.value}>{serverUrl || "Not configured"}</span>
+          <span style={styles.label}>伺服器網址</span>
+          <span style={styles.value}>{serverUrl || "未設定"}</span>
         </div>
         <div style={styles.row}>
-          <span style={styles.label}>Status</span>
+          <span style={styles.label}>狀態</span>
           <span style={{ ...styles.value, color: configUsername ? "#a6e3a1" : "#f38ba8" }}>
-            {configUsername ? "Connected" : "Disconnected"}
+            {configUsername ? "已連線" : "未連線"}
           </span>
         </div>
         <div style={styles.rowLast}>
-          <span style={styles.label}>Session</span>
+          <span style={styles.label}>工作階段</span>
           <button style={styles.dangerButton} onClick={handleLogout}>
-            Logout
+            登出
           </button>
         </div>
       </div>
 
       {/* Scanning Section */}
       <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>Scanning</h3>
+        <h3 style={styles.sectionTitle}>掃描</h3>
         <div style={styles.row}>
-          <span style={styles.label}>Scan interval</span>
+          <span style={styles.label}>掃描間隔</span>
           <div style={styles.sliderContainer}>
             <input
               type="range"
@@ -293,10 +293,10 @@ export function SettingsView() {
           </div>
         </div>
         <div style={{ padding: "8px 0" }}>
-          <span style={styles.label}>Excluded projects</span>
+          <span style={styles.label}>排除的專案</span>
           {excludedProjects.length === 0 ? (
             <div style={{ ...styles.tagList }}>
-              <span style={styles.emptyText}>No excluded projects</span>
+              <span style={styles.emptyText}>無排除的專案</span>
             </div>
           ) : (
             <div style={styles.tagList}>
@@ -306,7 +306,7 @@ export function SettingsView() {
                   <button
                     style={styles.removeButton}
                     onClick={() => removeExcludedProject(project)}
-                    title="Remove"
+                    title="移除"
                   >
                     x
                   </button>
@@ -318,7 +318,7 @@ export function SettingsView() {
             <input
               style={styles.input}
               type="text"
-              placeholder="Project directory name..."
+              placeholder="專案目錄名稱..."
               value={newExcluded}
               onChange={(e) => setNewExcluded(e.target.value)}
               onKeyDown={(e) => {
@@ -326,7 +326,7 @@ export function SettingsView() {
               }}
             />
             <button style={styles.smallButton} onClick={handleAddExcluded}>
-              Add
+              新增
             </button>
           </div>
         </div>
@@ -334,7 +334,7 @@ export function SettingsView() {
 
       {/* Application Section */}
       <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>Application</h3>
+        <h3 style={styles.sectionTitle}>應用程式</h3>
         <div
           style={styles.checkboxRow}
           onClick={() => handleAutoStartToggle(!(autoStartEnabled ?? autoStart))}
@@ -345,7 +345,7 @@ export function SettingsView() {
             checked={autoStartEnabled ?? autoStart}
             onChange={() => {}}
           />
-          <span style={styles.label}>Auto-start on login</span>
+          <span style={styles.label}>登入時自動啟動</span>
         </div>
         <div
           style={styles.checkboxRow}
@@ -357,31 +357,31 @@ export function SettingsView() {
             checked={startMinimized}
             onChange={() => {}}
           />
-          <span style={styles.label}>Start minimized</span>
+          <span style={styles.label}>啟動時最小化</span>
         </div>
       </div>
 
       {/* About Section */}
       <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>About</h3>
+        <h3 style={styles.sectionTitle}>關於</h3>
         <div style={styles.row}>
-          <span style={styles.label}>Version</span>
+          <span style={styles.label}>版本</span>
           <span style={styles.value}>v{APP_VERSION}</span>
         </div>
         <div style={styles.row}>
-          <span style={styles.label}>Updates</span>
+          <span style={styles.label}>更新</span>
           <button
             style={styles.smallButton}
             onClick={() => {
               // Placeholder for future auto-update integration
-              alert("Auto-update coming soon!");
+              alert("自動更新即將推出！");
             }}
           >
-            Check for updates
+            檢查更新
           </button>
         </div>
         <div style={styles.rowLast}>
-          <span style={styles.label}>Source</span>
+          <span style={styles.label}>原始碼</span>
           <a
             style={styles.link}
             href={GITHUB_URL}

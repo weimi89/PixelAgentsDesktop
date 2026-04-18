@@ -22,18 +22,18 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))?;
 
     // Build menu items
-    let show_hide = MenuItemBuilder::with_id(MENU_SHOW_HIDE, "Show/Hide")
+    let show_hide = MenuItemBuilder::with_id(MENU_SHOW_HIDE, "顯示/隱藏")
         .build(app)?;
 
-    let status_item = MenuItemBuilder::with_id(MENU_STATUS, "Status: Disconnected")
+    let status_item = MenuItemBuilder::with_id(MENU_STATUS, "狀態: 未連線")
         .enabled(false)
         .build(app)?;
 
-    let agents_item = MenuItemBuilder::with_id(MENU_AGENTS, "Agents: 0")
+    let agents_item = MenuItemBuilder::with_id(MENU_AGENTS, "代理: 0")
         .enabled(false)
         .build(app)?;
 
-    let quit_item = MenuItemBuilder::with_id(MENU_QUIT, "Quit")
+    let quit_item = MenuItemBuilder::with_id(MENU_QUIT, "結束")
         .build(app)?;
 
     // Build context menu
@@ -105,11 +105,11 @@ pub struct TrayMenuItems {
 pub fn update_tray_status(app: &AppHandle, connected: bool, agent_count: u32) {
     if let Some(items) = app.try_state::<TrayMenuItems>() {
         let status_text = if connected {
-            "Status: Connected"
+            "狀態: 已連線"
         } else {
-            "Status: Disconnected"
+            "狀態: 未連線"
         };
         let _ = items.status.set_text(status_text);
-        let _ = items.agents.set_text(format!("Agents: {agent_count}"));
+        let _ = items.agents.set_text(format!("代理: {agent_count}"));
     }
 }

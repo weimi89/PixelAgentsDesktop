@@ -29,13 +29,13 @@ function handleSidecarEvent(event: SidecarEvent) {
     case "connected":
       setStatus("connected");
       setError(null);
-      addLog({ timestamp: Date.now(), level: "info", source: "connection", message: "Connected to server" });
+      addLog({ timestamp: Date.now(), level: "info", source: "connection", message: "已連線至伺服器" });
       break;
 
     case "disconnected":
       setStatus("disconnected");
       clearAgents();
-      addLog({ timestamp: Date.now(), level: "warn", source: "connection", message: "Disconnected from server" });
+      addLog({ timestamp: Date.now(), level: "warn", source: "connection", message: "已中斷與伺服器的連線" });
       break;
 
     case "agent_created":
@@ -56,7 +56,7 @@ function handleSidecarEvent(event: SidecarEvent) {
         level: "info",
         source: "agent",
         agentSessionId: p.sessionId,
-        message: `Agent started: ${p.projectName || p.sessionId.slice(0, 8)}`,
+        message: `代理已啟動: ${p.projectName || p.sessionId.slice(0, 8)}`,
       });
       break;
     }
@@ -70,7 +70,7 @@ function handleSidecarEvent(event: SidecarEvent) {
         level: "info",
         source: "agent",
         agentSessionId: p.sessionId,
-        message: `Agent stopped: ${p.sessionId.slice(0, 8)}`,
+        message: `代理已停止: ${p.sessionId.slice(0, 8)}`,
       });
       break;
     }
@@ -95,7 +95,7 @@ function handleSidecarEvent(event: SidecarEvent) {
         level: "debug",
         source: "tool",
         agentSessionId: p.sessionId,
-        message: `Tool started: ${p.toolName}`,
+        message: `工具已啟動: ${p.toolName}`,
       });
       break;
     }
@@ -125,7 +125,7 @@ function handleSidecarEvent(event: SidecarEvent) {
         level: "debug",
         source: "tool",
         agentSessionId: p.sessionId,
-        message: `Tool completed${p.toolName ? `: ${p.toolName}` : ""}`,
+        message: `工具已完成${p.toolName ? `: ${p.toolName}` : ""}`,
       });
       break;
     }
@@ -150,7 +150,7 @@ function handleSidecarEvent(event: SidecarEvent) {
         timestamp: Date.now(),
         level: "info",
         source: "connection",
-        message: `Connection: ${p.connected ? "connected" : "disconnected"}`,
+        message: `連線: ${p.connected ? "已連線" : "已中斷"}`,
       });
       break;
     }
@@ -166,7 +166,7 @@ function handleSidecarEvent(event: SidecarEvent) {
         level: "info",
         source: "transcript",
         agentSessionId: p.sessionId,
-        message: p.summary || p.message || "Transcript update",
+        message: p.summary || p.message || "對話記錄更新",
       });
       break;
     }
@@ -202,7 +202,7 @@ function handleSidecarEvent(event: SidecarEvent) {
         level: "info",
         source: "terminal",
         agentSessionId: p.sessionId,
-        message: "Terminal ready",
+        message: "終端機就緒",
       });
       break;
     }
@@ -214,7 +214,7 @@ function handleSidecarEvent(event: SidecarEvent) {
         level: "warn",
         source: "terminal",
         agentSessionId: p.sessionId,
-        message: `Terminal exited (code: ${p.code ?? "unknown"})`,
+        message: `終端機已結束 (代碼: ${p.code ?? "未知"})`,
       });
       break;
     }
