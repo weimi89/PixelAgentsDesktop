@@ -1,5 +1,6 @@
 mod commands;
 mod ipc;
+mod secret_store;
 mod sidecar;
 mod state;
 mod tray;

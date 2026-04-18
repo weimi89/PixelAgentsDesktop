@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useConnectionStore } from "../stores/connectionStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { disconnect, loadConfig } from "../tauri-api";
@@ -173,7 +174,9 @@ const styles = {
 } as const;
 
 export function SettingsView() {
-  const { serverUrl } = useConnectionStore();
+  // 只訂閱需要的欄位，避免其他 connection state 變化（例如 latency 更新）
+  // 造成整個設定畫面重渲染
+  const serverUrl = useConnectionStore((s) => s.serverUrl);
   const {
     scanIntervalMs,
     excludedProjects,
@@ -183,10 +186,23 @@ export function SettingsView() {
     setScanInterval,
     addExcludedProject,
     removeExcludedProject,
-    setAutoStart,
     setStartMinimized,
     loadSettings,
-  } = useSettingsStore();
+  } = useSettingsStore(
+    useShallow((s) => ({
+      scanIntervalMs: s.scanIntervalMs,
+      excludedProjects: s.excludedProjects,
+      autoStart: s.autoStart,
+      startMinimized: s.startMinimized,
+      loaded: s.loaded,
+      setScanInterval: s.setScanInterval,
+      addExcludedProject: s.addExcludedProject,
+      removeExcludedProject: s.removeExcludedProject,
+      setStartMinimized: s.setStartMinimized,
+      loadSettings: s.loadSettings,
+    })),
+  );
+  const setAutoStart = useSettingsStore((s) => s.setAutoStart);
 
   const [newExcluded, setNewExcluded] = useState("");
   const [configUsername, setConfigUsername] = useState<string | null>(null);

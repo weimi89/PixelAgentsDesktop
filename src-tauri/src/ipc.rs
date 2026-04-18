@@ -71,3 +71,75 @@ pub enum IpcMessage {
     Response(IpcResponse),
     Event(IpcEvent),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn encode_request_appends_newline() {
+        let req = IpcRequest {
+            id: 42,
+            method: "getStatus".into(),
+            params: None,
+        };
+        let encoded = encode_request(&req).unwrap();
+        assert!(encoded.ends_with('\n'));
+        assert!(encoded.contains("\"id\":42"));
+        assert!(encoded.contains("\"method\":\"getStatus\""));
+        // None 的 params 不會被序列化
+        assert!(!encoded.contains("\"params\""));
+    }
+
+    #[test]
+    fn encode_request_includes_params_when_present() {
+        let req = IpcRequest {
+            id: 1,
+            method: "connect".into(),
+            params: Some(json!({ "serverUrl": "https://x", "token": "t" })),
+        };
+        let encoded = encode_request(&req).unwrap();
+        assert!(encoded.contains("\"serverUrl\":\"https://x\""));
+    }
+
+    #[test]
+    fn decode_line_distinguishes_response_from_event_by_id_field() {
+        let resp_line = r#"{"id":7,"result":{"ok":true}}"#;
+        match decode_line(resp_line).unwrap() {
+            IpcMessage::Response(r) => {
+                assert_eq!(r.id, 7);
+                assert!(r.error.is_none());
+                assert_eq!(r.result.unwrap(), json!({"ok": true}));
+            }
+            _ => panic!("expected response"),
+        }
+
+        let event_line = r#"{"event":"agentStarted","data":{"sessionId":"s1"}}"#;
+        match decode_line(event_line).unwrap() {
+            IpcMessage::Event(e) => {
+                assert_eq!(e.event, "agentStarted");
+                assert_eq!(e.data, json!({"sessionId": "s1"}));
+            }
+            _ => panic!("expected event"),
+        }
+    }
+
+    #[test]
+    fn decode_line_response_with_error_field() {
+        let line = r#"{"id":3,"error":"boom"}"#;
+        match decode_line(line).unwrap() {
+            IpcMessage::Response(r) => {
+                assert_eq!(r.id, 3);
+                assert_eq!(r.error.as_deref(), Some("boom"));
+            }
+            _ => panic!("expected response"),
+        }
+    }
+
+    #[test]
+    fn decode_line_rejects_malformed_json() {
+        assert!(decode_line("not-json").is_err());
+        assert!(decode_line("{incomplete").is_err());
+    }
+}

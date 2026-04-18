@@ -1,18 +1,17 @@
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import { AgentList } from "./AgentList";
-import { TerminalPanel } from "./TerminalPanel";
 import { LogViewer } from "./LogViewer";
 import { SettingsView } from "./SettingsView";
 import { StatusBar } from "./StatusBar";
+import { useTranslation } from "../i18n";
+
+// TerminalPanel 引入 xterm.js（~200KB），僅在使用者切到「終端機」分頁時才載入，
+// 其他分頁啟動時不需等待 xterm 下載與初始化。
+const TerminalPanel = lazy(() =>
+  import("./TerminalPanel").then((m) => ({ default: m.TerminalPanel })),
+);
 
 type TabId = "agents" | "terminal" | "logs" | "settings";
-
-const TABS: { id: TabId; label: string }[] = [
-  { id: "agents", label: "代理" },
-  { id: "terminal", label: "終端機" },
-  { id: "logs", label: "日誌" },
-  { id: "settings", label: "設定" },
-];
 
 const styles = {
   container: {
@@ -46,15 +45,44 @@ const styles = {
   },
 } as const;
 
+function TerminalFallback() {
+  const t = useTranslation();
+  return (
+    <div style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "100%",
+      color: "#6c7086",
+      fontFamily: "monospace",
+      fontSize: "13px",
+    }}>
+      {t("terminal.loading")}
+    </div>
+  );
+}
+
 export function MainView() {
   const [activeTab, setActiveTab] = useState<TabId>("agents");
+  const t = useTranslation();
+
+  const tabs: { id: TabId; label: string }[] = [
+    { id: "agents", label: t("tabs.agents") },
+    { id: "terminal", label: t("tabs.terminal") },
+    { id: "logs", label: t("tabs.logs") },
+    { id: "settings", label: t("tabs.settings") },
+  ];
 
   const renderContent = () => {
     switch (activeTab) {
       case "agents":
         return <AgentList />;
       case "terminal":
-        return <TerminalPanel />;
+        return (
+          <Suspense fallback={<TerminalFallback />}>
+            <TerminalPanel />
+          </Suspense>
+        );
       case "logs":
         return <LogViewer />;
       case "settings":
@@ -65,7 +93,7 @@ export function MainView() {
   return (
     <div style={styles.container}>
       <div style={styles.tabBar}>
-        {TABS.map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab.id}
             style={styles.tab(activeTab === tab.id)}

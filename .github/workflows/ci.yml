@@ -69,3 +69,7 @@ jobs:
       - name: Cargo check
         working-directory: src-tauri
         run: cargo check --locked
+      - name: Cargo test
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: src-tauri
+        run: cargo test --lib --locked

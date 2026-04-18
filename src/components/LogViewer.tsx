@@ -1,6 +1,12 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { useFilteredLogs, useLogStore, type LogLevel, type LogEntry } from "../stores/logStore";
+import {
+  useFilteredLogs,
+  useLogStore,
+  snapshotOrderedLogs,
+  type LogLevel,
+  type LogEntry,
+} from "../stores/logStore";
 import { useAgentStore } from "../stores/agentStore";
 
 const LEVEL_COLORS: Record<LogLevel, string> = {
@@ -191,16 +197,15 @@ export function LogViewer() {
     });
   }, []);
 
-  // Auto-scroll when new logs arrive and user is at bottom
-  useEffect(() => {
-    if (atBottom && filteredLogs.length > 0) {
-      virtuosoRef.current?.scrollToIndex({ index: "LAST" });
-    }
-  }, [filteredLogs.length, atBottom]);
+  // 注意：Virtuoso 的 followOutput="smooth" 已經在 at-bottom 時自動捲動；
+  // 先前的 useEffect scrollToIndex 是冗餘且會與 followOutput 互搶時機。
 
   const handleExport = useCallback(() => {
-    const logs = useLogStore.getState().logs;
-    const blob = new Blob([JSON.stringify(logs, null, 2)], { type: "application/json" });
+    // 匯出目前所有日誌（不套用篩選條件 — 這是慣例）
+    const ordered = snapshotOrderedLogs();
+    const blob = new Blob([JSON.stringify(ordered, null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

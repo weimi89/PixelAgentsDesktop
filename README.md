@@ -71,9 +71,9 @@ npx tsc --noEmit
 
 ## 安全注意事項
 
-- 認證 token 目前以檔案形式儲存，權限收斂至 0600。未來會遷移至 OS
-  keychain（macOS Keychain / Windows Credential Manager / Linux Secret
-  Service）。
+- 認證 token 優先儲存於 OS keychain（macOS Keychain / Windows Credential
+  Manager / Linux Secret Service）。若 keychain 不可用，回退至
+  `~/.pixel-agents/node-config.json`（Unix 檔案權限 0600）。
 - 前端 Tauri capabilities 收斂至僅必要權限；`shell:allow-spawn/execute/
   kill` 等僅在 Rust 後端內部使用，不暴露給 WebView。
 - Content Security Policy 已啟用，限制 `default-src 'self'`。

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useConnectionStore } from "../stores/connectionStore";
 import { useSystemStore } from "../stores/systemStore";
 import { disconnect } from "../tauri-api";
+import { useTranslation } from "../i18n";
 
 const styles = {
   bar: {
@@ -84,6 +85,7 @@ export function StatusBar() {
     useConnectionStore();
   const sidecarVersion = useSystemStore((s) => s.sidecarVersion);
   const [copied, setCopied] = useState(false);
+  const t = useTranslation();
 
   const indicatorColor = STATUS_COLORS[status] ?? "#6c7086";
 
@@ -112,7 +114,11 @@ export function StatusBar() {
       <div style={styles.statusGroup}>
         <span style={styles.indicator(indicatorColor)} />
         <span style={styles.value}>
-          {status === "connected" ? "已連線" : status === "connecting" ? "連線中" : "未連線"}
+          {status === "connected"
+            ? t("status.connected")
+            : status === "connecting"
+            ? t("status.connecting")
+            : t("status.disconnected")}
         </span>
       </div>
 
@@ -120,21 +126,21 @@ export function StatusBar() {
         <button
           style={styles.serverUrl}
           onClick={handleCopy}
-          title={copied ? "已複製！" : `點擊複製：${serverUrl}`}
+          title={copied ? t("status.copied") : `${t("status.copyHint")}: ${serverUrl}`}
         >
-          {copied ? "已複製" : serverUrl}
+          {copied ? t("status.copied") : serverUrl}
         </button>
       )}
 
       <span>
-        <span style={styles.label}>延遲: </span>
+        <span style={styles.label}>{t("status.latency")} </span>
         <span style={styles.value}>
           {latency > 0 ? `${latency}ms` : "--"}
         </span>
       </span>
 
       <span>
-        <span style={styles.label}>代理: </span>
+        <span style={styles.label}>{t("status.agents")} </span>
         <span style={styles.value}>{agentCount}</span>
       </span>
 
@@ -143,14 +149,14 @@ export function StatusBar() {
       <div style={styles.spacer} />
 
       {sidecarVersion && (
-        <span style={styles.version} title="Sidecar 協定版本">
+        <span style={styles.version} title={t("status.sidecarVersion")}>
           sidecar v{sidecarVersion}
         </span>
       )}
 
       {status === "connected" && (
         <button style={styles.disconnectButton} onClick={handleDisconnect}>
-          中斷連線
+          {t("status.disconnect")}
         </button>
       )}
     </div>

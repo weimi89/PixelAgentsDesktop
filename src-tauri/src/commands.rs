@@ -3,7 +3,70 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::State;
 
+use crate::secret_store;
 use crate::state::AppState;
+
+/// Build the shared HTTP client used for login & other REST calls.
+fn build_http_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {e}"))
+}
+
+/// POST JSON with exponential backoff on connection / 5xx errors.
+/// Does NOT retry on 4xx — those are caller errors that retrying won't fix.
+async fn post_json_with_retry(
+    client: &reqwest::Client,
+    url: &str,
+    body: &Value,
+) -> Result<reqwest::Response, String> {
+    const MAX_ATTEMPTS: u32 = 3;
+    let mut delay_ms: u64 = 500;
+    let mut last_err: String = String::new();
+
+    for attempt in 1..=MAX_ATTEMPTS {
+        match client.post(url).json(body).send().await {
+            Ok(resp) => {
+                let status = resp.status();
+                if status.is_success() || status.is_client_error() {
+                    // 4xx caller error：不重試
+                    return Ok(resp);
+                }
+                // 5xx / 其他：值得重試
+                last_err = format!("HTTP {}", status);
+            }
+            Err(e) => {
+                last_err = if e.is_timeout() {
+                    "request timed out".to_string()
+                } else if e.is_connect() {
+                    "connection failed".to_string()
+                } else {
+                    format!("network error: {e}")
+                };
+            }
+        }
+
+        if attempt < MAX_ATTEMPTS {
+            log::warn!(
+                "HTTP {} attempt {}/{} failed: {} — retrying in {}ms",
+                url,
+                attempt,
+                MAX_ATTEMPTS,
+                last_err,
+                delay_ms
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+            delay_ms = delay_ms.saturating_mul(2);
+        }
+    }
+
+    Err(format!(
+        "HTTP request to {} failed after {} attempts: {}",
+        url, MAX_ATTEMPTS, last_err
+    ))
+}
 
 /// Get the config file path: ~/.pixel-agents/node-config.json
 fn config_path() -> Result<PathBuf, String> {
@@ -39,19 +102,15 @@ pub async fn login_server(
     username: String,
     password: String,
 ) -> Result<Value, String> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .build()
-        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+    let client = build_http_client()?;
     let url = format!("{}/api/auth/login", server_url.trim_end_matches('/'));
 
-    let resp = client
-        .post(&url)
-        .json(&json!({ "username": username, "password": password }))
-        .send()
-        .await
-        .map_err(|e| format!("HTTP request failed: {e}"))?;
+    let resp = post_json_with_retry(
+        &client,
+        &url,
+        &json!({ "username": username, "password": password }),
+    )
+    .await?;
 
     if !resp.status().is_success() {
         let status = resp.status();
@@ -87,19 +146,15 @@ pub async fn login_with_key(
     server_url: String,
     api_key: String,
 ) -> Result<Value, String> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .build()
-        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+    let client = build_http_client()?;
     let url = format!("{}/api/auth/login-key", server_url.trim_end_matches('/'));
 
-    let resp = client
-        .post(&url)
-        .json(&json!({ "apiKey": api_key }))
-        .send()
-        .await
-        .map_err(|e| format!("HTTP request failed: {e}"))?;
+    let resp = post_json_with_retry(
+        &client,
+        &url,
+        &json!({ "apiKey": api_key }),
+    )
+    .await?;
 
     if !resp.status().is_success() {
         let status = resp.status();
@@ -129,7 +184,8 @@ pub async fn login_with_key(
     }))
 }
 
-/// Load saved config from ~/.pixel-agents/node-config.json.
+/// Load saved config: server URL 從檔案、token 優先讀 keychain，
+/// 回退到舊格式檔案中的 token 欄位以保持向後相容。
 #[tauri::command]
 pub async fn load_config() -> Result<Value, String> {
     let path = config_path()?;
@@ -138,8 +194,17 @@ pub async fn load_config() -> Result<Value, String> {
     }
     let content = fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read config: {e}"))?;
-    let config: Value = serde_json::from_str(&content)
+    let mut config: Value = serde_json::from_str(&content)
         .map_err(|e| format!("Failed to parse config: {e}"))?;
+
+    // Token 優先從 keychain 讀取；若 keychain 中沒有但檔案中有（舊版資料），
+    // 保留檔案中的 token 作為最後備援。
+    if let Some(token) = secret_store::load_token() {
+        if let Some(obj) = config.as_object_mut() {
+            obj.insert("token".to_string(), Value::String(token));
+        }
+    }
+
     Ok(config)
 }
 
@@ -150,21 +215,27 @@ pub async fn save_config(server_url: String, token: String) -> Result<Value, Str
     Ok(json!({ "ok": true }))
 }
 
-/// Internal helper to write config file.
+/// Internal helper to write config.
 ///
-/// 在 Unix 上將檔案權限收斂至 0600（僅 owner 可讀寫），避免其他帳號或
-/// 誤用 group 讀取明文 token。真正的解法是遷移至 OS keychain，但那需要
-/// 較大變更；這裡先以最小改動提高基本防線。
+/// Token 優先寫入 OS keychain（macOS Keychain / Windows Credential Manager /
+/// Linux Secret Service）。若 keychain 不可用則回退到加密度較低但仍收斂
+/// 為 0600 權限的本地檔案；無論哪條路徑，server URL 都寫入檔案。
 fn save_config_to_file(server_url: &str, token: &str) -> Result<(), String> {
     let path = config_path()?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create config directory: {e}"))?;
     }
-    let config = json!({
-        "server": server_url,
-        "token": token,
-    });
+
+    let stored_in_keychain = secret_store::store_token(token).unwrap_or(false);
+
+    // 檔案中僅在 keychain 不可用時保留 token；否則不寫 token 欄位，
+    // 避免磁碟上留下明文副本。
+    let config = if stored_in_keychain {
+        json!({ "server": server_url })
+    } else {
+        json!({ "server": server_url, "token": token })
+    };
     let content = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialize config: {e}"))?;
     fs::write(&path, content)
@@ -374,7 +445,7 @@ pub async fn update_excluded_projects(
         .await
 }
 
-/// Logout: disconnect sidecar and delete config file.
+/// Logout: disconnect sidecar, clear keychain token, and delete config file.
 #[tauri::command]
 pub async fn logout(state: State<'_, AppState>) -> Result<Value, String> {
     let sidecar = state.sidecar.clone();
@@ -382,7 +453,12 @@ pub async fn logout(state: State<'_, AppState>) -> Result<Value, String> {
         let _ = sidecar.request("disconnect", None).await;
     }
 
-    // Delete config file
+    // 清除 keychain 中的 token（若存在）
+    if let Err(e) = secret_store::delete_token() {
+        log::warn!("Failed to delete token from keychain: {e}");
+    }
+
+    // 刪除 config 檔
     let path = config_path()?;
     if path.exists() {
         fs::remove_file(&path)
