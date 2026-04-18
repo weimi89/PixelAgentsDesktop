@@ -1,21 +1,34 @@
 mod commands;
+mod diagnostics;
 mod ipc;
 mod secret_store;
 mod sidecar;
 mod state;
 mod tray;
 
+use tracing_subscriber::EnvFilter;
+
+fn init_tracing() {
+    // 把 log crate 的訊息橋接到 tracing（Tauri 與 tokio 等依賴仍使用 log!）
+    let _ = tracing_log::LogTracer::init();
+
+    // RUST_LOG=debug 可覆寫；預設 info
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(true)
+        .with_thread_ids(false)
+        .try_init();
+}
+
 use state::AppState;
 use tauri::{Manager, RunEvent, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // 預設顯示 info 以上；使用者可以透過 RUST_LOG 環境變數覆寫（例 RUST_LOG=debug）
-    env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("info"),
-    )
-    .init();
-    log::info!("Pixel Agents Desktop starting...");
+    init_tracing();
+    diagnostics::init();
+    tracing::info!("Pixel Agents Desktop starting...");
 
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -24,6 +37,8 @@ pub fn run() {
             None,
         ))
         .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_status,
@@ -42,6 +57,7 @@ pub fn run() {
             commands::update_scan_interval,
             commands::update_excluded_projects,
             commands::logout,
+            commands::get_diagnostics,
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
@@ -53,7 +69,7 @@ pub fn run() {
         .setup(|app| {
             // Set up system tray
             if let Err(e) = tray::setup_tray(app) {
-                log::error!("Failed to set up system tray: {e}");
+                tracing::error!("Failed to set up system tray: {e}");
             }
 
             // macOS: hide dock icon, behave as a tray-only app
@@ -66,8 +82,8 @@ pub fn run() {
             let node_path = which_node().unwrap_or_else(|| "node".to_string());
             let sidecar_path = resolve_sidecar_path(app);
 
-            log::info!("Node path: {node_path}");
-            log::info!("Sidecar path: {sidecar_path}");
+            tracing::info!("Node path: {node_path}");
+            tracing::info!("Sidecar path: {sidecar_path}");
 
             // Spawn sidecar in background, then auto-connect if config exists.
             // No outer lock is held — SidecarManager uses internal synchronization.
@@ -82,7 +98,7 @@ pub fn run() {
                     .spawn(&node_path, &sidecar_path, app_handle.clone())
                     .await
                 {
-                    log::error!("Failed to spawn sidecar: {e}");
+                    tracing::error!("Failed to spawn sidecar: {e}");
                     return;
                 }
 
@@ -96,7 +112,7 @@ pub fn run() {
                                     config["server"].as_str(),
                                     config["token"].as_str(),
                                 ) {
-                                    log::info!("Auto-connecting to {server}...");
+                                    tracing::info!("Auto-connecting to {server}...");
                                     match sidecar
                                         .request(
                                             "connect",
@@ -107,8 +123,8 @@ pub fn run() {
                                         )
                                         .await
                                     {
-                                        Ok(_) => log::info!("Auto-connect succeeded"),
-                                        Err(e) => log::warn!("Auto-connect failed: {e}"),
+                                        Ok(_) => tracing::info!("Auto-connect succeeded"),
+                                        Err(e) => tracing::warn!("Auto-connect failed: {e}"),
                                     }
                                 }
                             }
@@ -125,7 +141,7 @@ pub fn run() {
     // Run with event handler for graceful shutdown
     app.run(|app_handle, event| {
         if let RunEvent::ExitRequested { .. } = &event {
-            log::info!("Exit requested, shutting down sidecar...");
+            tracing::info!("Exit requested, shutting down sidecar...");
             let handle = app_handle.clone();
             tauri::async_runtime::block_on(async move {
                 let sidecar = {
@@ -134,7 +150,7 @@ pub fn run() {
                 };
                 if sidecar.is_running().await {
                     if let Err(e) = sidecar.shutdown().await {
-                        log::error!("Error during sidecar shutdown: {e}");
+                        tracing::error!("Error during sidecar shutdown: {e}");
                     }
                 }
             });

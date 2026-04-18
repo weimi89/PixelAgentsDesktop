@@ -1,3 +1,59 @@
+# 代碼簽章與自動更新設定指引
+
+## 自動更新（tauri-plugin-updater）
+
+Tauri 2 的 updater plugin 需要：
+
+1. **生成更新簽章金鑰對**：
+   ```bash
+   npx @tauri-apps/cli signer generate -w ~/.tauri/pixel-agents.key
+   ```
+   產生的 `.key` 為私鑰（不入版控），`.key.pub` 為公鑰。
+
+2. **在 `src-tauri/tauri.conf.json` 填入公鑰與更新端點**：
+   ```json
+   {
+     "bundle": {
+       "createUpdaterArtifacts": true
+     },
+     "plugins": {
+       "updater": {
+         "pubkey": "<貼上 .key.pub 的完整內容>",
+         "endpoints": [
+           "https://releases.example.com/pixel-agents-desktop/{{target}}/{{arch}}/{{current_version}}"
+         ]
+       }
+     }
+   }
+   ```
+
+3. **Build 時以環境變數提供私鑰**：
+   ```bash
+   export TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/pixel-agents.key)"
+   export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""   # 若有密碼
+   npm run build
+   ```
+
+4. **發佈更新 manifest**（放在 `endpoints` 對應 URL）：
+   ```json
+   {
+     "version": "0.2.0",
+     "notes": "修復若干 bug",
+     "pub_date": "2026-04-19T12:00:00Z",
+     "platforms": {
+       "darwin-aarch64": {
+         "signature": "<由 Tauri 產生>",
+         "url": "https://releases.example.com/Pixel_Agents_Desktop_0.2.0_aarch64.app.tar.gz"
+       }
+     }
+   }
+   ```
+
+端點 URL 未設定時，前端「檢查更新」按鈕會顯示「此建置尚未設定更新伺服器」；
+應用仍可正常運作，只是不會取得更新。
+
+---
+
 # 代碼簽章設定指引
 
 未簽章的桌面應用在 macOS 與 Windows 上都會被作業系統攔阻或顯示安全警告。

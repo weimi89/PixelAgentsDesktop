@@ -22,12 +22,12 @@ pub fn store_token(token: &str) -> Result<bool, String> {
         Ok(e) => match e.set_password(token) {
             Ok(()) => Ok(true),
             Err(err) => {
-                log::warn!("keychain store failed, will fall back to file: {err}");
+                tracing::warn!("keychain store failed, will fall back to file: {err}");
                 Ok(false)
             }
         },
         Err(err) => {
-            log::warn!("keychain unavailable, will fall back to file: {err}");
+            tracing::warn!("keychain unavailable, will fall back to file: {err}");
             Ok(false)
         }
     }
@@ -40,7 +40,7 @@ pub fn load_token() -> Option<String> {
         Ok(s) => Some(s),
         Err(keyring::Error::NoEntry) => None,
         Err(err) => {
-            log::warn!("keychain read failed: {err}");
+            tracing::warn!("keychain read failed: {err}");
             None
         }
     }

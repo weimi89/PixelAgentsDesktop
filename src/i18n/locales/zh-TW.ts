@@ -116,6 +116,30 @@ export const zhTW = {
     languageZh: "繁體中文",
     languageEn: "English",
   },
+  updater: {
+    check: "檢查更新",
+    checking: "檢查中...",
+    upToDate: "已是最新版本",
+    available: "有新版本可用：v{version}",
+    download: "下載並安裝",
+    installing: "下載中，請勿關閉應用...",
+    notConfigured: "此建置尚未設定更新伺服器",
+    error: "檢查更新失敗：{message}",
+  },
+  diagnostics: {
+    title: "診斷",
+    uptime: "上線時間",
+    ipcRequests: "IPC 請求總數",
+    ipcErrors: "IPC 請求錯誤",
+    ipcEvents: "IPC 事件接收",
+    sidecarSpawns: "Sidecar 啟動次數",
+    sidecarRestarts: "Sidecar 重啟次數",
+    sidecarCrashes: "Sidecar 崩潰次數",
+    httpRetries: "HTTP 重試次數",
+    refresh: "重新整理",
+    loading: "載入中...",
+    secondsUnit: "秒",
+  },
 } as const;
 
 // 把 zhTW 的深層 literal 型別放寬為 string，讓其他語言字典只需滿足結構相同

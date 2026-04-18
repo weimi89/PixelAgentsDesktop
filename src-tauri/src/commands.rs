@@ -3,8 +3,15 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::State;
 
+use crate::diagnostics;
 use crate::secret_store;
 use crate::state::AppState;
+
+/// 返回內部診斷指標快照（IPC 計數、sidecar 事件、上線時間等）。
+#[tauri::command]
+pub async fn get_diagnostics() -> Result<Value, String> {
+    Ok(diagnostics::snapshot())
+}
 
 /// Build the shared HTTP client used for login & other REST calls.
 fn build_http_client() -> Result<reqwest::Client, String> {
@@ -49,13 +56,14 @@ async fn post_json_with_retry(
         }
 
         if attempt < MAX_ATTEMPTS {
-            log::warn!(
-                "HTTP {} attempt {}/{} failed: {} — retrying in {}ms",
-                url,
+            diagnostics::incr_http_retry();
+            tracing::warn!(
+                url = %url,
                 attempt,
-                MAX_ATTEMPTS,
-                last_err,
-                delay_ms
+                max_attempts = MAX_ATTEMPTS,
+                error = %last_err,
+                delay_ms,
+                "HTTP request failed, retrying",
             );
             tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
             delay_ms = delay_ms.saturating_mul(2);
@@ -246,7 +254,7 @@ fn save_config_to_file(server_url: &str, token: &str) -> Result<(), String> {
         use std::os::unix::fs::PermissionsExt;
         let perm = fs::Permissions::from_mode(0o600);
         if let Err(e) = fs::set_permissions(&path, perm) {
-            log::warn!("Failed to tighten config file permissions: {e}");
+            tracing::warn!("Failed to tighten config file permissions: {e}");
         }
     }
 
@@ -455,7 +463,7 @@ pub async fn logout(state: State<'_, AppState>) -> Result<Value, String> {
 
     // 清除 keychain 中的 token（若存在）
     if let Err(e) = secret_store::delete_token() {
-        log::warn!("Failed to delete token from keychain: {e}");
+        tracing::warn!("Failed to delete token from keychain: {e}");
     }
 
     // 刪除 config 檔

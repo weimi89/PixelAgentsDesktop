@@ -197,25 +197,38 @@ export function LoginView() {
 
   return (
     <div style={styles.container}>
-      <div style={styles.card}>
-        <h1 style={styles.title}>Pixel Agents</h1>
+      <form
+        style={styles.card}
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleConnect();
+        }}
+        aria-labelledby="login-title"
+      >
+        <h1 id="login-title" style={styles.title}>Pixel Agents</h1>
         <p style={styles.subtitle}>{t("login.subtitle")}</p>
 
         <div style={styles.fieldGroup}>
-          <label style={styles.label}>{t("login.serverUrl")}</label>
+          <label style={styles.label} htmlFor="login-server-url">{t("login.serverUrl")}</label>
           <input
+            id="login-server-url"
             style={styles.input}
-            type="text"
+            type="url"
             placeholder="https://your-server:3000"
             value={serverUrl}
             onChange={(e) => setServerUrlLocal(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={loading}
+            autoComplete="url"
+            required
           />
         </div>
 
-        <div style={styles.modeToggle}>
+        <div style={styles.modeToggle} role="radiogroup" aria-label={t("login.subtitle")}>
           <button
+            type="button"
+            role="radio"
+            aria-checked={authMode === "apikey"}
             style={styles.modeButton(authMode === "apikey")}
             onClick={() => setAuthMode("apikey")}
             disabled={loading}
@@ -223,6 +236,9 @@ export function LoginView() {
             {t("login.modeApiKey")}
           </button>
           <button
+            type="button"
+            role="radio"
+            aria-checked={authMode === "password"}
             style={styles.modeButton(authMode === "password")}
             onClick={() => setAuthMode("password")}
             disabled={loading}
@@ -233,21 +249,25 @@ export function LoginView() {
 
         {authMode === "apikey" ? (
           <div style={styles.fieldGroup}>
-            <label style={styles.label}>{t("login.apiKey")}</label>
+            <label style={styles.label} htmlFor="login-api-key">{t("login.apiKey")}</label>
             <div style={styles.secretRow}>
               <input
+                id="login-api-key"
                 style={{ ...styles.input, paddingRight: "56px" }}
                 type={showApiKey ? "text" : "password"}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 onKeyDown={handleKeyDown}
                 disabled={loading}
+                autoComplete="off"
+                required
               />
               <button
                 type="button"
                 style={styles.toggleButton}
                 onClick={() => setShowApiKey((v) => !v)}
                 tabIndex={-1}
+                aria-pressed={showApiKey}
                 aria-label={showApiKey ? t("login.hide") : t("login.show")}
               >
                 {showApiKey ? t("login.hide") : t("login.show")}
@@ -257,32 +277,39 @@ export function LoginView() {
         ) : (
           <>
             <div style={styles.fieldGroup}>
-              <label style={styles.label}>{t("login.username")}</label>
+              <label style={styles.label} htmlFor="login-username">{t("login.username")}</label>
               <input
+                id="login-username"
                 style={styles.input}
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 onKeyDown={handleKeyDown}
                 disabled={loading}
+                autoComplete="username"
+                required
               />
             </div>
             <div style={styles.fieldGroup}>
-              <label style={styles.label}>{t("login.password")}</label>
+              <label style={styles.label} htmlFor="login-password">{t("login.password")}</label>
               <div style={styles.secretRow}>
                 <input
+                  id="login-password"
                   style={{ ...styles.input, paddingRight: "56px" }}
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={handleKeyDown}
                   disabled={loading}
+                  autoComplete="current-password"
+                  required
                 />
                 <button
                   type="button"
                   style={styles.toggleButton}
                   onClick={() => setShowPassword((v) => !v)}
                   tabIndex={-1}
+                  aria-pressed={showPassword}
                   aria-label={showPassword ? t("login.hide") : t("login.show")}
                 >
                   {showPassword ? t("login.hide") : t("login.show")}
@@ -293,13 +320,14 @@ export function LoginView() {
         )}
 
         <button
+          type="submit"
           style={
             canConnect && !loading
               ? styles.connectButton
               : styles.connectButtonDisabled
           }
-          onClick={handleConnect}
           disabled={!canConnect || loading}
+          aria-busy={loading}
         >
           {loading ? (
             <>
@@ -311,8 +339,12 @@ export function LoginView() {
           )}
         </button>
 
-        {error && <div style={styles.error}>{error}</div>}
-      </div>
+        {error && (
+          <div style={styles.error} role="alert" aria-live="assertive">
+            {error}
+          </div>
+        )}
+      </form>
     </div>
   );
 }

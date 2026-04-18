@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useConnectionStore } from "../stores/connectionStore";
 import { useSettingsStore } from "../stores/settingsStore";
-import { disconnect, loadConfig } from "../tauri-api";
+import { disconnect, loadConfig, getDiagnostics, type DiagnosticsSnapshot } from "../tauri-api";
 import { invoke } from "@tauri-apps/api/core";
 import { useLocaleStore, useTranslation, type LocaleCode } from "../i18n";
+import { checkForUpdate, type UpdateCheckResult } from "../lib/updater";
 
 const APP_VERSION = "0.1.0";
 const GITHUB_URL = "https://github.com/nicepkg/pixel-agents-desktop";
@@ -211,6 +212,13 @@ export function SettingsView() {
   const [newExcluded, setNewExcluded] = useState("");
   const [configUsername, setConfigUsername] = useState<string | null>(null);
   const [autoStartEnabled, setAutoStartEnabled] = useState<boolean | null>(null);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsSnapshot | null>(null);
+  const [updateState, setUpdateState] = useState<
+    | { kind: "idle" }
+    | { kind: "checking" }
+    | { kind: "result"; result: UpdateCheckResult }
+    | { kind: "installing" }
+  >({ kind: "idle" });
 
   // Load settings on mount
   useEffect(() => {
@@ -233,6 +241,35 @@ export function SettingsView() {
       .then((enabled) => setAutoStartEnabled(enabled as boolean))
       .catch(() => setAutoStartEnabled(null));
   }, []);
+
+  // Load diagnostics once on mount
+  const refreshDiagnostics = () => {
+    void getDiagnostics()
+      .then((snap) => setDiagnostics(snap))
+      .catch(() => setDiagnostics(null));
+  };
+  useEffect(() => {
+    refreshDiagnostics();
+  }, []);
+
+  const handleCheckUpdate = async () => {
+    setUpdateState({ kind: "checking" });
+    const result = await checkForUpdate();
+    setUpdateState({ kind: "result", result });
+  };
+
+  const handleDownloadUpdate = async () => {
+    if (updateState.kind !== "result" || updateState.result.kind !== "available") return;
+    const { download } = updateState.result;
+    setUpdateState({ kind: "installing" });
+    try {
+      await download();
+      // relaunch 後這行不會執行；若 relaunch 失敗則把狀態還原
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setUpdateState({ kind: "result", result: { kind: "error", message: msg } });
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -409,6 +446,62 @@ export function SettingsView() {
         </div>
       </div>
 
+      {/* Diagnostics Section */}
+      <div style={styles.section}>
+        <h3 style={styles.sectionTitle}>{t("diagnostics.title")}</h3>
+        {diagnostics ? (
+          <>
+            <div style={styles.row}>
+              <span style={styles.label}>{t("diagnostics.uptime")}</span>
+              <span style={styles.value}>
+                {diagnostics.uptimeSecs} {t("diagnostics.secondsUnit")}
+              </span>
+            </div>
+            <div style={styles.row}>
+              <span style={styles.label}>{t("diagnostics.ipcRequests")}</span>
+              <span style={styles.value}>{diagnostics.ipc.requestsTotal}</span>
+            </div>
+            <div style={styles.row}>
+              <span style={styles.label}>{t("diagnostics.ipcErrors")}</span>
+              <span style={{ ...styles.value, color: diagnostics.ipc.requestErrors > 0 ? "#f38ba8" : undefined }}>
+                {diagnostics.ipc.requestErrors}
+              </span>
+            </div>
+            <div style={styles.row}>
+              <span style={styles.label}>{t("diagnostics.ipcEvents")}</span>
+              <span style={styles.value}>{diagnostics.ipc.eventsReceived}</span>
+            </div>
+            <div style={styles.row}>
+              <span style={styles.label}>{t("diagnostics.sidecarSpawns")}</span>
+              <span style={styles.value}>{diagnostics.sidecar.spawns}</span>
+            </div>
+            <div style={styles.row}>
+              <span style={styles.label}>{t("diagnostics.sidecarRestarts")}</span>
+              <span style={{ ...styles.value, color: diagnostics.sidecar.restarts > 0 ? "#fab387" : undefined }}>
+                {diagnostics.sidecar.restarts}
+              </span>
+            </div>
+            <div style={styles.row}>
+              <span style={styles.label}>{t("diagnostics.sidecarCrashes")}</span>
+              <span style={{ ...styles.value, color: diagnostics.sidecar.crashes > 0 ? "#f38ba8" : undefined }}>
+                {diagnostics.sidecar.crashes}
+              </span>
+            </div>
+            <div style={styles.row}>
+              <span style={styles.label}>{t("diagnostics.httpRetries")}</span>
+              <span style={styles.value}>{diagnostics.http.retries}</span>
+            </div>
+            <div style={styles.rowLast}>
+              <button style={styles.smallButton} onClick={refreshDiagnostics}>
+                {t("diagnostics.refresh")}
+              </button>
+            </div>
+          </>
+        ) : (
+          <span style={styles.emptyText}>{t("diagnostics.loading")}</span>
+        )}
+      </div>
+
       {/* About Section */}
       <div style={styles.section}>
         <h3 style={styles.sectionTitle}>{t("settings.about")}</h3>
@@ -418,9 +511,11 @@ export function SettingsView() {
         </div>
         <div style={styles.row}>
           <span style={styles.label}>{t("settings.update")}</span>
-          <span style={{ ...styles.value, color: "#6c7086", fontStyle: "italic" }}>
-            {t("settings.updateUnsupported")}
-          </span>
+          <UpdateStatus
+            state={updateState}
+            onCheck={handleCheckUpdate}
+            onDownload={handleDownloadUpdate}
+          />
         </div>
         <div style={styles.rowLast}>
           <span style={styles.label}>{t("settings.sourceCode")}</span>
@@ -442,4 +537,73 @@ export function SettingsView() {
       </div>
     </div>
   );
+}
+
+interface UpdateStatusProps {
+  state:
+    | { kind: "idle" }
+    | { kind: "checking" }
+    | { kind: "result"; result: UpdateCheckResult }
+    | { kind: "installing" };
+  onCheck: () => void;
+  onDownload: () => void;
+}
+
+function UpdateStatus({ state, onCheck, onDownload }: UpdateStatusProps) {
+  const t = useTranslation();
+  const smallButton = {
+    padding: "4px 10px",
+    background: "#45475a",
+    color: "#cdd6f4",
+    border: "none",
+    borderRadius: 0,
+    cursor: "pointer",
+    fontWeight: 400,
+    fontSize: "11px",
+    fontFamily: "monospace",
+  } as const;
+  const text = {
+    fontSize: "12px",
+    color: "#a6adc8",
+    fontFamily: "monospace",
+  } as const;
+
+  if (state.kind === "idle") {
+    return (
+      <button style={smallButton} onClick={onCheck}>
+        {t("updater.check")}
+      </button>
+    );
+  }
+  if (state.kind === "checking") {
+    return <span style={text}>{t("updater.checking")}</span>;
+  }
+  if (state.kind === "installing") {
+    return <span style={text}>{t("updater.installing")}</span>;
+  }
+  // kind === "result"
+  const r = state.result;
+  switch (r.kind) {
+    case "noUpdate":
+      return <span style={{ ...text, color: "#a6e3a1" }}>{t("updater.upToDate")}</span>;
+    case "notConfigured":
+      return <span style={{ ...text, fontStyle: "italic" }}>{t("updater.notConfigured")}</span>;
+    case "error":
+      return (
+        <span style={{ ...text, color: "#f38ba8" }}>
+          {t("updater.error", { message: r.message })}
+        </span>
+      );
+    case "available":
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <span style={{ ...text, color: "#fab387" }}>
+            {t("updater.available", { version: r.version })}
+          </span>
+          <button style={smallButton} onClick={onDownload}>
+            {t("updater.download")}
+          </button>
+        </div>
+      );
+  }
 }

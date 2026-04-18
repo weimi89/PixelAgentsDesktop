@@ -13,6 +13,7 @@ use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{oneshot, Mutex, Notify};
 use tokio::task::JoinHandle;
 
+use crate::diagnostics;
 use crate::ipc::{decode_line, encode_request, IpcMessage, IpcRequest};
 use crate::tray;
 
@@ -120,7 +121,8 @@ impl SidecarManager {
         sidecar_path: &str,
         app_handle: AppHandle,
     ) -> Result<(), String> {
-        log::info!("Spawning sidecar: {} {}", node_path, sidecar_path);
+        tracing::info!(node_path, sidecar_path, "spawning sidecar");
+        diagnostics::incr_sidecar_spawn();
         self.shutting_down.store(false, Ordering::SeqCst);
 
         let spawned = spawn_child_process(node_path, sidecar_path)?;
@@ -132,7 +134,7 @@ impl SidecarManager {
         )
         .await;
 
-        log::info!("Sidecar spawned successfully");
+        tracing::info!("Sidecar spawned successfully");
         Ok(())
     }
 
@@ -195,13 +197,14 @@ impl SidecarManager {
                         }
                     }
                     Ok(IpcMessage::Event(evt)) => {
-                        log::debug!("Sidecar event: {} {:?}", evt.event, evt.data);
+                        diagnostics::incr_ipc_event();
+                        tracing::debug!(event = %evt.event, "sidecar event");
                         if evt.event == "ready" {
                             if let Some(version) =
                                 evt.data.get("version").and_then(|v| v.as_str())
                             {
                                 if version != EXPECTED_SIDECAR_VERSION {
-                                    log::warn!(
+                                    tracing::warn!(
                                         "Sidecar protocol version mismatch: expected {}, got {}",
                                         EXPECTED_SIDECAR_VERSION,
                                         version
@@ -217,7 +220,7 @@ impl SidecarManager {
                                         }),
                                     );
                                 } else {
-                                    log::info!("Sidecar protocol version: {}", version);
+                                    tracing::info!("Sidecar protocol version: {}", version);
                                 }
                             }
                         }
@@ -225,12 +228,12 @@ impl SidecarManager {
                         let _ = app.emit("sidecar-event", &evt);
                     }
                     Err(e) => {
-                        log::warn!("Failed to decode sidecar line: {e} — line: {line}");
+                        tracing::warn!("Failed to decode sidecar line: {e} — line: {line}");
                     }
                 }
             }
 
-            log::info!("Sidecar stdout reader ended");
+            tracing::info!("Sidecar stdout reader ended");
 
             // --- Drain pending to avoid 10s timeouts on the frontend ---
             {
@@ -247,11 +250,12 @@ impl SidecarManager {
 
             // --- Crash detection & auto-restart ---
             if shutting_down.load(Ordering::SeqCst) {
-                log::info!("Sidecar shutdown was intentional, not restarting");
+                tracing::info!("Sidecar shutdown was intentional, not restarting");
                 return;
             }
 
-            log::warn!("Sidecar exited unexpectedly, attempting auto-restart...");
+            tracing::warn!("Sidecar exited unexpectedly, attempting auto-restart...");
+            diagnostics::incr_sidecar_crash();
             let _ = app.emit(
                 "sidecar-crash",
                 serde_json::json!({
@@ -273,7 +277,7 @@ impl SidecarManager {
                 return;
             }
 
-            log::info!("Re-spawning sidecar...");
+            tracing::info!("Re-spawning sidecar...");
             match spawn_child_process(&restart_node_path, &restart_sidecar_path) {
                 Ok(spawned) => {
                     manager
@@ -286,7 +290,8 @@ impl SidecarManager {
                         )
                         .await;
 
-                    log::info!("Sidecar restarted successfully");
+                    tracing::info!("Sidecar restarted successfully");
+                    diagnostics::incr_sidecar_restart();
                     let _ = app.emit(
                         "sidecar-crash",
                         serde_json::json!({
@@ -307,7 +312,7 @@ impl SidecarManager {
                         tokio::time::sleep(std::time::Duration::from_secs(RESTART_WINDOW_SECS))
                             .await;
                         if !shutdown_flag.load(Ordering::SeqCst) {
-                            log::info!(
+                            tracing::info!(
                                 "Sidecar stable for {} minutes, resetting restart counter",
                                 RESTART_WINDOW_SECS / 60
                             );
@@ -319,7 +324,7 @@ impl SidecarManager {
                     // Re-connect to server if we had a prior successful connect.
                     let maybe_params = manager.last_connect_params.lock().await.clone();
                     if let Some(params) = maybe_params {
-                        log::info!("Re-connecting after restart...");
+                        tracing::info!("Re-connecting after restart...");
                         match manager
                             .request(
                                 "connect",
@@ -330,13 +335,13 @@ impl SidecarManager {
                             )
                             .await
                         {
-                            Ok(_) => log::info!("Auto-reconnect succeeded"),
-                            Err(e) => log::warn!("Auto-reconnect failed: {e}"),
+                            Ok(_) => tracing::info!("Auto-reconnect succeeded"),
+                            Err(e) => tracing::warn!("Auto-reconnect failed: {e}"),
                         }
                     }
                 }
                 Err(e) => {
-                    log::error!("Failed to restart sidecar: {e}");
+                    tracing::error!("Failed to restart sidecar: {e}");
                     let _ = app.emit(
                         "sidecar-crash",
                         serde_json::json!({
@@ -353,7 +358,7 @@ impl SidecarManager {
             let reader = BufReader::new(stderr);
             let mut lines = reader.lines();
             while let Ok(Some(line)) = lines.next_line().await {
-                log::debug!("[sidecar stderr] {line}");
+                tracing::debug!("[sidecar stderr] {line}");
             }
         });
     }
@@ -367,6 +372,7 @@ impl SidecarManager {
         method: &str,
         params: Option<Value>,
     ) -> Result<Value, String> {
+        diagnostics::incr_ipc_request();
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let req = IpcRequest {
             id,
@@ -417,6 +423,10 @@ impl SidecarManager {
             }
         };
 
+        if result.is_err() {
+            diagnostics::incr_ipc_error();
+        }
+
         // Remember successful connect params for post-crash auto-reconnect
         if method == "connect" && result.is_ok() {
             if let Some(p) = params.as_ref() {
@@ -465,9 +475,9 @@ impl SidecarManager {
             )
             .await
             {
-                Ok(Ok(_)) => log::info!("Sidecar acknowledged shutdown"),
-                Ok(Err(e)) => log::warn!("Sidecar shutdown request failed: {e}"),
-                Err(_) => log::warn!(
+                Ok(Ok(_)) => tracing::info!("Sidecar acknowledged shutdown"),
+                Ok(Err(e)) => tracing::warn!("Sidecar shutdown request failed: {e}"),
+                Err(_) => tracing::warn!(
                     "Sidecar shutdown request timed out ({SHUTDOWN_TIMEOUT_SECS}s)"
                 ),
             }
@@ -487,7 +497,7 @@ impl SidecarManager {
             let _ = tx.send(Err("Sidecar shut down".to_string()));
         }
 
-        log::info!("Sidecar shut down");
+        tracing::info!("Sidecar shut down");
         Ok(())
     }
 
@@ -519,7 +529,7 @@ async fn check_restart_limits(
     drop(last_time);
 
     if count >= MAX_RESTARTS as u64 {
-        log::error!(
+        tracing::error!(
             "Sidecar crashed {} times within {} minutes, giving up",
             MAX_RESTARTS,
             RESTART_WINDOW_SECS / 60
@@ -536,7 +546,7 @@ async fn check_restart_limits(
 
     // Exponential backoff: 1s, 3s, 9s
     let delay_secs = BACKOFF_BASE_SECS * BACKOFF_MULTIPLIER.pow(count as u32);
-    log::info!(
+    tracing::info!(
         "Waiting {}s before restart (attempt {}/{})",
         delay_secs,
         count + 1,
@@ -548,7 +558,7 @@ async fn check_restart_limits(
             !shutting_down.load(Ordering::SeqCst)
         }
         _ = shutdown_notify.notified() => {
-            log::info!("Shutdown requested during restart backoff");
+            tracing::info!("Shutdown requested during restart backoff");
             false
         }
     }

@@ -92,10 +92,15 @@ export function MainView() {
 
   return (
     <div style={styles.container}>
-      <div style={styles.tabBar}>
+      <div style={styles.tabBar} role="tablist" aria-label={t("app.title")}>
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            aria-controls={`tabpanel-${tab.id}`}
+            id={`tab-${tab.id}`}
+            tabIndex={activeTab === tab.id ? 0 : -1}
             style={styles.tab(activeTab === tab.id)}
             onClick={() => setActiveTab(tab.id)}
           >
@@ -103,10 +108,17 @@ export function MainView() {
           </button>
         ))}
       </div>
-      <div style={{
-        ...styles.content,
-        ...(activeTab === "terminal" ? { padding: 0, overflow: "hidden" } : {}),
-      }}>{renderContent()}</div>
+      <div
+        role="tabpanel"
+        id={`tabpanel-${activeTab}`}
+        aria-labelledby={`tab-${activeTab}`}
+        style={{
+          ...styles.content,
+          ...(activeTab === "terminal" ? { padding: 0, overflow: "hidden" } : {}),
+        }}
+      >
+        {renderContent()}
+      </div>
       <StatusBar />
     </div>
   );

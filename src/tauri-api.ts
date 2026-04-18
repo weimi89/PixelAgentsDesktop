@@ -133,6 +133,29 @@ export async function logout(): Promise<void> {
   await invoke("logout");
 }
 
+// --- Diagnostics ---
+
+export interface DiagnosticsSnapshot {
+  uptimeSecs: number;
+  ipc: {
+    requestsTotal: number;
+    requestErrors: number;
+    eventsReceived: number;
+  };
+  sidecar: {
+    spawns: number;
+    restarts: number;
+    crashes: number;
+  };
+  http: {
+    retries: number;
+  };
+}
+
+export async function getDiagnostics(): Promise<DiagnosticsSnapshot> {
+  return invoke<DiagnosticsSnapshot>("get_diagnostics");
+}
+
 // --- Event listeners ---
 //
 // SidecarEventKind lists every event `event` value that the sidecar emits

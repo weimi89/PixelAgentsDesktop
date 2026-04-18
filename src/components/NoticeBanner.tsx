@@ -63,11 +63,19 @@ export function NoticeBanner() {
 
   const color = COLORS[notice.level];
   return (
-    <div style={styles.container(color, !!notice.fatal)}>
+    <div
+      style={styles.container(color, !!notice.fatal)}
+      role={notice.level === "error" ? "alert" : "status"}
+      aria-live={notice.level === "error" ? "assertive" : "polite"}
+    >
       <span style={styles.message} title={notice.message}>
         {notice.message}
       </span>
-      <button style={styles.button(color)} onClick={clearNotice}>
+      <button
+        style={styles.button(color)}
+        onClick={clearNotice}
+        aria-label={t("errors.close")}
+      >
         {t("errors.close")}
       </button>
     </div>
