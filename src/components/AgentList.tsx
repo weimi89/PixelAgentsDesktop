@@ -1,6 +1,7 @@
 import { useShallow } from "zustand/react/shallow";
 import { useAgentStore } from "../stores/agentStore";
 import { AgentCard } from "./AgentCard";
+import { useTranslation } from "../i18n";
 
 const styles = {
   container: {
@@ -32,6 +33,7 @@ const styles = {
 } as const;
 
 export function AgentList() {
+  const t = useTranslation();
   // 只訂閱 sessionId 陣列 — 單一 agent 的 tool/狀態變化不會讓 AgentList 重渲染；
   // useShallow 以淺比較避免每次返回新 array 引用導致誤判更新。
   const sessionIds = useAgentStore(
@@ -43,9 +45,9 @@ export function AgentList() {
       <div style={styles.empty}>
         <div style={styles.emptyIcon}>[  ]</div>
         <div style={styles.emptyText}>
-          尚未偵測到代理。
+          {t("agents.emptyTitle")}
           <br />
-          等待 Claude Code 工作階段...
+          {t("agents.emptyHint")}
         </div>
       </div>
     );

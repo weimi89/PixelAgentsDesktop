@@ -8,6 +8,7 @@ import {
   type LogEntry,
 } from "../stores/logStore";
 import { useAgentStore } from "../stores/agentStore";
+import { useTranslation } from "../i18n";
 
 const LEVEL_COLORS: Record<LogLevel, string> = {
   info: "#89b4fa",
@@ -173,6 +174,7 @@ function LogRow({ entry }: { entry: LogEntry }) {
 }
 
 export function LogViewer() {
+  const t = useTranslation();
   const [levelFilter, setLevelFilter] = useState<LogLevel | "">("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [agentFilter, setAgentFilter] = useState("");
@@ -223,35 +225,35 @@ export function LogViewer() {
   return (
     <div style={styles.container}>
       <div style={styles.filterBar}>
-        <span style={styles.filterLabel}>等級:</span>
+        <span style={styles.filterLabel}>{t("logs.filterLevel")}</span>
         <select
           style={styles.select}
           value={levelFilter}
           onChange={(e) => setLevelFilter(e.target.value as LogLevel | "")}
         >
-          <option value="">全部</option>
-          <option value="info">資訊</option>
-          <option value="warn">警告</option>
-          <option value="error">錯誤</option>
-          <option value="debug">除錯</option>
+          <option value="">{t("logs.levelAll")}</option>
+          <option value="info">{t("logs.levelInfo")}</option>
+          <option value="warn">{t("logs.levelWarn")}</option>
+          <option value="error">{t("logs.levelError")}</option>
+          <option value="debug">{t("logs.levelDebug")}</option>
         </select>
 
-        <span style={styles.filterLabel}>來源:</span>
+        <span style={styles.filterLabel}>{t("logs.filterSource")}</span>
         <input
           style={styles.input}
           type="text"
-          placeholder="篩選來源..."
+          placeholder={t("logs.filterSourcePlaceholder")}
           value={sourceFilter}
           onChange={(e) => setSourceFilter(e.target.value)}
         />
 
-        <span style={styles.filterLabel}>代理:</span>
+        <span style={styles.filterLabel}>{t("logs.filterAgent")}</span>
         <select
           style={styles.select}
           value={agentFilter}
           onChange={(e) => setAgentFilter(e.target.value)}
         >
-          <option value="">全部</option>
+          <option value="">{t("logs.levelAll")}</option>
           {agentList.map((a) => (
             <option key={a.sessionId} value={a.sessionId}>
               {a.projectName || a.sessionId.slice(0, 8)}
@@ -260,22 +262,22 @@ export function LogViewer() {
         </select>
 
         <button style={styles.button} onClick={handleClearFilters}>
-          清除篩選
+          {t("logs.clearFilters")}
         </button>
 
         <div style={styles.spacer} />
 
         <button style={styles.button} onClick={handleExport}>
-          匯出
+          {t("logs.export")}
         </button>
         <button style={styles.buttonDanger} onClick={clearLogs}>
-          清除日誌
+          {t("logs.clearLogs")}
         </button>
       </div>
 
       <div style={{ ...styles.listContainer, position: "relative" }}>
         {filteredLogs.length === 0 ? (
-          <div style={styles.empty}>無日誌記錄</div>
+          <div style={styles.empty}>{t("logs.emptyText")}</div>
         ) : (
           <>
             <Virtuoso
@@ -288,7 +290,7 @@ export function LogViewer() {
             />
             {!atBottom && (
               <button style={styles.scrollButton} onClick={scrollToBottom}>
-                捲動至底部
+                {t("logs.scrollToBottom")}
               </button>
             )}
           </>

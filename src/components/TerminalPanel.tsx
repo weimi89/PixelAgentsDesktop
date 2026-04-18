@@ -9,6 +9,7 @@ import {
   terminalDetach,
 } from "../tauri-api";
 import type { SidecarEvent } from "../tauri-api";
+import { useTranslation } from "../i18n";
 
 import "@xterm/xterm/css/xterm.css";
 
@@ -81,6 +82,7 @@ const styles = {
 };
 
 export function TerminalPanel() {
+  const t = useTranslation();
   const agents = useAgentStore((s) => s.agents);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     null,
@@ -154,7 +156,7 @@ export function TerminalPanel() {
             setTermReady(false);
             setTermExited(true);
             setExitMessage(
-              `終端機已結束，代碼 ${code ?? "未知"}`,
+              t("terminal.exited", { code: code ?? "?" }),
             );
           }
         }
@@ -246,7 +248,7 @@ export function TerminalPanel() {
     return (
       <div style={styles.container}>
         <div style={styles.placeholder}>
-          無可用代理，請先連線至伺服器。
+          {t("terminal.placeholderNoAgents")}
         </div>
       </div>
     );
@@ -255,13 +257,13 @@ export function TerminalPanel() {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <span style={styles.label}>代理:</span>
+        <span style={styles.label}>{t("terminal.agentLabel")}</span>
         <select
           style={styles.select}
           value={selectedSessionId ?? ""}
           onChange={(e) => setSelectedSessionId(e.target.value || null)}
         >
-          <option value="">-- 選擇代理 --</option>
+          <option value="">{t("terminal.selectAgent")}</option>
           {agentList.map((agent) => (
             <option key={agent.sessionId} value={agent.sessionId}>
               {agent.projectName} ({agent.sessionId.slice(0, 8)})
@@ -270,7 +272,7 @@ export function TerminalPanel() {
         </select>
         <div
           style={styles.statusDot(termReady)}
-          title={termReady ? "已連線" : "未連線"}
+          title={termReady ? t("status.connected") : t("status.disconnected")}
         />
       </div>
 
@@ -282,7 +284,7 @@ export function TerminalPanel() {
         )
       ) : (
         <div style={styles.placeholder}>
-          選擇一個代理以開啟終端機。
+          {t("terminal.placeholderSelect")}
         </div>
       )}
     </div>

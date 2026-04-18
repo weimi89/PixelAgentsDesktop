@@ -1,6 +1,7 @@
 import { memo, useState } from "react";
 import { useAgentStore, type ToolInfo } from "../stores/agentStore";
 import { useTick } from "../hooks/useTick";
+import { useTranslation } from "../i18n";
 
 const TOOL_COLORS: Record<string, string> = {
   // File operations — blue
@@ -44,14 +45,17 @@ function formatElapsed(startedAt: number): string {
   return `${min}m${sec % 60}s`;
 }
 
-function formatTimeSince(timestamp: number): string {
-  const sec = Math.floor((Date.now() - timestamp) / 1000);
-  if (sec < 5) return "剛剛";
-  if (sec < 60) return `${sec} 秒前`;
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min} 分前`;
-  const hr = Math.floor(min / 60);
-  return `${hr} 小時前`;
+function useFormatTimeSince(): (timestamp: number) => string {
+  const t = useTranslation();
+  return (timestamp: number): string => {
+    const sec = Math.floor((Date.now() - timestamp) / 1000);
+    if (sec < 5) return t("agents.timeJustNow");
+    if (sec < 60) return t("agents.timeSecondsAgo", { n: sec });
+    const min = Math.floor(sec / 60);
+    if (min < 60) return t("agents.timeMinutesAgo", { n: min });
+    const hr = Math.floor(min / 60);
+    return t("agents.timeHoursAgo", { n: hr });
+  };
 }
 
 function truncateSessionId(sessionId: string): string {
@@ -137,6 +141,8 @@ function AgentCardInner({ sessionId }: { sessionId: string }) {
   // 以 sessionId 訂閱單一 agent — 只有該 agent 變更時本 card 才重渲染
   const agent = useAgentStore((s) => s.agents.get(sessionId));
   const [hovered, setHovered] = useState(false);
+  const t = useTranslation();
+  const formatTimeSince = useFormatTimeSince();
   // 訂閱共用 tick 讓「最後活動: N 秒前」能每秒刷新
   useTick();
 
@@ -166,7 +172,7 @@ function AgentCardInner({ sessionId }: { sessionId: string }) {
 
       {agent.lastActivity > 0 && (
         <div style={styles.footer}>
-          最後活動: {formatTimeSince(agent.lastActivity)}
+          {t("agents.lastActivity")} {formatTimeSince(agent.lastActivity)}
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { connect as connectServer, loginServer } from "../tauri-api";
 import { useConnectionStore } from "../stores/connectionStore";
+import { useTranslation } from "../i18n";
 
 type AuthMode = "apikey" | "password";
 
@@ -133,6 +134,7 @@ const styles = {
 export function LoginView() {
   const { serverUrl: savedUrl, setServerUrl, setToken, setStatus, setError } =
     useConnectionStore();
+  const t = useTranslation();
 
   const [serverUrl, setServerUrlLocal] = useState(
     savedUrl || "https://localhost:3000"
@@ -197,10 +199,10 @@ export function LoginView() {
     <div style={styles.container}>
       <div style={styles.card}>
         <h1 style={styles.title}>Pixel Agents</h1>
-        <p style={styles.subtitle}>連線至伺服器</p>
+        <p style={styles.subtitle}>{t("login.subtitle")}</p>
 
         <div style={styles.fieldGroup}>
-          <label style={styles.label}>伺服器網址</label>
+          <label style={styles.label}>{t("login.serverUrl")}</label>
           <input
             style={styles.input}
             type="text"
@@ -218,20 +220,20 @@ export function LoginView() {
             onClick={() => setAuthMode("apikey")}
             disabled={loading}
           >
-            API 金鑰
+            {t("login.modeApiKey")}
           </button>
           <button
             style={styles.modeButton(authMode === "password")}
             onClick={() => setAuthMode("password")}
             disabled={loading}
           >
-            密碼
+            {t("login.modePassword")}
           </button>
         </div>
 
         {authMode === "apikey" ? (
           <div style={styles.fieldGroup}>
-            <label style={styles.label}>API 金鑰</label>
+            <label style={styles.label}>{t("login.apiKey")}</label>
             <div style={styles.secretRow}>
               <input
                 style={{ ...styles.input, paddingRight: "56px" }}
@@ -246,16 +248,16 @@ export function LoginView() {
                 style={styles.toggleButton}
                 onClick={() => setShowApiKey((v) => !v)}
                 tabIndex={-1}
-                aria-label={showApiKey ? "隱藏" : "顯示"}
+                aria-label={showApiKey ? t("login.hide") : t("login.show")}
               >
-                {showApiKey ? "隱藏" : "顯示"}
+                {showApiKey ? t("login.hide") : t("login.show")}
               </button>
             </div>
           </div>
         ) : (
           <>
             <div style={styles.fieldGroup}>
-              <label style={styles.label}>使用者名稱</label>
+              <label style={styles.label}>{t("login.username")}</label>
               <input
                 style={styles.input}
                 type="text"
@@ -266,7 +268,7 @@ export function LoginView() {
               />
             </div>
             <div style={styles.fieldGroup}>
-              <label style={styles.label}>密碼</label>
+              <label style={styles.label}>{t("login.password")}</label>
               <div style={styles.secretRow}>
                 <input
                   style={{ ...styles.input, paddingRight: "56px" }}
@@ -281,9 +283,9 @@ export function LoginView() {
                   style={styles.toggleButton}
                   onClick={() => setShowPassword((v) => !v)}
                   tabIndex={-1}
-                  aria-label={showPassword ? "隱藏" : "顯示"}
+                  aria-label={showPassword ? t("login.hide") : t("login.show")}
                 >
-                  {showPassword ? "隱藏" : "顯示"}
+                  {showPassword ? t("login.hide") : t("login.show")}
                 </button>
               </div>
             </div>
@@ -302,10 +304,10 @@ export function LoginView() {
           {loading ? (
             <>
               <span style={styles.spinner}>&#9696;</span>
-              連線中...
+              {t("login.connecting")}
             </>
           ) : (
-            "連線"
+            t("login.connect")
           )}
         </button>
 

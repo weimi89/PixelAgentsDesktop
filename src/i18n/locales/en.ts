@@ -107,5 +107,13 @@ export const en: Dictionary = {
     disconnected: "Disconnected from server",
     transcriptUpdate: "Transcript updated",
     connectionLabel: "Connection:",
+    toolStarted: "Tool started:",
+    toolCompleted: "Tool completed",
+    toolCompletedWith: "Tool completed:",
+  },
+  settingsExtra: {
+    language: "Language",
+    languageZh: "繁體中文",
+    languageEn: "English",
   },
 };

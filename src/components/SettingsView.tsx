@@ -4,6 +4,7 @@ import { useConnectionStore } from "../stores/connectionStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { disconnect, loadConfig } from "../tauri-api";
 import { invoke } from "@tauri-apps/api/core";
+import { useLocaleStore, useTranslation, type LocaleCode } from "../i18n";
 
 const APP_VERSION = "0.1.0";
 const GITHUB_URL = "https://github.com/nicepkg/pixel-agents-desktop";
@@ -174,6 +175,9 @@ const styles = {
 } as const;
 
 export function SettingsView() {
+  const t = useTranslation();
+  const locale = useLocaleStore((s) => s.locale);
+  const setLocale = useLocaleStore((s) => s.setLocale);
   // 只訂閱需要的欄位，避免其他 connection state 變化（例如 latency 更新）
   // 造成整個設定畫面重渲染
   const serverUrl = useConnectionStore((s) => s.serverUrl);
@@ -270,30 +274,30 @@ export function SettingsView() {
     <div style={styles.container}>
       {/* Connection Section */}
       <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>連線</h3>
+        <h3 style={styles.sectionTitle}>{t("settings.connection")}</h3>
         <div style={styles.row}>
-          <span style={styles.label}>伺服器網址</span>
-          <span style={styles.value}>{serverUrl || "未設定"}</span>
+          <span style={styles.label}>{t("settings.serverUrl")}</span>
+          <span style={styles.value}>{serverUrl || t("settings.notConfigured")}</span>
         </div>
         <div style={styles.row}>
-          <span style={styles.label}>狀態</span>
+          <span style={styles.label}>{t("settings.statusLabel")}</span>
           <span style={{ ...styles.value, color: configUsername ? "#a6e3a1" : "#f38ba8" }}>
-            {configUsername ? "已連線" : "未連線"}
+            {configUsername ? t("settings.statusConnected") : t("settings.statusDisconnected")}
           </span>
         </div>
         <div style={styles.rowLast}>
-          <span style={styles.label}>工作階段</span>
+          <span style={styles.label}>{t("settings.session")}</span>
           <button style={styles.dangerButton} onClick={handleLogout}>
-            登出
+            {t("settings.logout")}
           </button>
         </div>
       </div>
 
       {/* Scanning Section */}
       <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>掃描</h3>
+        <h3 style={styles.sectionTitle}>{t("settings.scan")}</h3>
         <div style={styles.row}>
-          <span style={styles.label}>掃描間隔</span>
+          <span style={styles.label}>{t("settings.scanInterval")}</span>
           <div style={styles.sliderContainer}>
             <input
               type="range"
@@ -308,10 +312,10 @@ export function SettingsView() {
           </div>
         </div>
         <div style={{ padding: "8px 0" }}>
-          <span style={styles.label}>排除的專案</span>
+          <span style={styles.label}>{t("settings.excludedProjects")}</span>
           {excludedProjects.length === 0 ? (
             <div style={{ ...styles.tagList }}>
-              <span style={styles.emptyText}>無排除的專案</span>
+              <span style={styles.emptyText}>{t("settings.noExcluded")}</span>
             </div>
           ) : (
             <div style={styles.tagList}>
@@ -321,7 +325,7 @@ export function SettingsView() {
                   <button
                     style={styles.removeButton}
                     onClick={() => removeExcludedProject(project)}
-                    title="移除"
+                    title={t("settings.remove")}
                   >
                     x
                   </button>
@@ -333,7 +337,7 @@ export function SettingsView() {
             <input
               style={styles.input}
               type="text"
-              placeholder="專案目錄名稱..."
+              placeholder={t("settings.excludedPlaceholder")}
               value={newExcluded}
               onChange={(e) => setNewExcluded(e.target.value)}
               onKeyDown={(e) => {
@@ -341,7 +345,7 @@ export function SettingsView() {
               }}
             />
             <button style={styles.smallButton} onClick={handleAddExcluded}>
-              新增
+              {t("settings.add")}
             </button>
           </div>
         </div>
@@ -349,7 +353,27 @@ export function SettingsView() {
 
       {/* Application Section */}
       <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>應用程式</h3>
+        <h3 style={styles.sectionTitle}>{t("settings.application")}</h3>
+        <div style={styles.row}>
+          <span style={styles.label}>{t("settingsExtra.language")}</span>
+          <select
+            style={{
+              background: "#1e1e2e",
+              color: "#cdd6f4",
+              border: "2px solid #45475a",
+              borderRadius: 0,
+              padding: "4px 8px",
+              fontFamily: "monospace",
+              fontSize: "12px",
+              cursor: "pointer",
+            }}
+            value={locale}
+            onChange={(e) => setLocale(e.target.value as LocaleCode)}
+          >
+            <option value="zh-TW">{t("settingsExtra.languageZh")}</option>
+            <option value="en">{t("settingsExtra.languageEn")}</option>
+          </select>
+        </div>
         <div
           style={{
             ...styles.checkboxRow,
@@ -369,7 +393,7 @@ export function SettingsView() {
             disabled={autoStartEnabled === null}
             onChange={() => {}}
           />
-          <span style={styles.label}>登入時自動啟動</span>
+          <span style={styles.label}>{t("settings.autoStart")}</span>
         </div>
         <div
           style={styles.checkboxRow}
@@ -381,25 +405,25 @@ export function SettingsView() {
             checked={startMinimized}
             onChange={() => {}}
           />
-          <span style={styles.label}>啟動時最小化</span>
+          <span style={styles.label}>{t("settings.startMinimized")}</span>
         </div>
       </div>
 
       {/* About Section */}
       <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>關於</h3>
+        <h3 style={styles.sectionTitle}>{t("settings.about")}</h3>
         <div style={styles.row}>
-          <span style={styles.label}>版本</span>
+          <span style={styles.label}>{t("settings.version")}</span>
           <span style={styles.value}>v{APP_VERSION}</span>
         </div>
         <div style={styles.row}>
-          <span style={styles.label}>更新</span>
+          <span style={styles.label}>{t("settings.update")}</span>
           <span style={{ ...styles.value, color: "#6c7086", fontStyle: "italic" }}>
-            手動下載 — 尚未支援自動更新
+            {t("settings.updateUnsupported")}
           </span>
         </div>
         <div style={styles.rowLast}>
-          <span style={styles.label}>原始碼</span>
+          <span style={styles.label}>{t("settings.sourceCode")}</span>
           <a
             style={styles.link}
             href={GITHUB_URL}

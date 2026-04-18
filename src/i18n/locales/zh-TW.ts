@@ -107,6 +107,14 @@ export const zhTW = {
     disconnected: "已中斷與伺服器的連線",
     transcriptUpdate: "對話記錄更新",
     connectionLabel: "連線:",
+    toolStarted: "工具已啟動:",
+    toolCompleted: "工具已完成",
+    toolCompletedWith: "工具已完成:",
+  },
+  settingsExtra: {
+    language: "語言",
+    languageZh: "繁體中文",
+    languageEn: "English",
   },
 } as const;
 

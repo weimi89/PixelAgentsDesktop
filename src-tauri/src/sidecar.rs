@@ -554,13 +554,20 @@ async fn check_restart_limits(
     }
 }
 
-/// Handle tray-relevant events from the sidecar.
-fn handle_tray_event(
-    app: &AppHandle,
+/// Tray update summary derived from an event. Extracted for testability.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TrayUpdate {
+    pub connected: bool,
+    pub agent_count: u32,
+}
+
+/// Pure function: update agent_count atomic based on event, return the
+/// tray update to apply. Separating this from the I/O makes it unit-testable.
+fn compute_tray_update(
     event_name: &str,
     data: &Value,
     agent_count: &Arc<AtomicU64>,
-) {
+) -> Option<TrayUpdate> {
     match event_name {
         "connectionStatus" => {
             let connected = data
@@ -570,25 +577,133 @@ fn handle_tray_event(
             if !connected {
                 agent_count.store(0, Ordering::SeqCst);
             }
-            tray::update_tray_status(app, connected, agent_count.load(Ordering::SeqCst) as u32);
+            Some(TrayUpdate {
+                connected,
+                agent_count: agent_count.load(Ordering::SeqCst) as u32,
+            })
         }
         "agentStarted" | "agent_created" => {
             let count = agent_count.fetch_add(1, Ordering::SeqCst) + 1;
-            tray::update_tray_status(app, true, count as u32);
+            Some(TrayUpdate {
+                connected: true,
+                agent_count: count as u32,
+            })
         }
         "agentStopped" | "agent_closed" => {
             let prev = agent_count.load(Ordering::SeqCst);
             let count = if prev > 0 { prev - 1 } else { 0 };
             agent_count.store(count, Ordering::SeqCst);
-            tray::update_tray_status(app, true, count as u32);
+            Some(TrayUpdate {
+                connected: true,
+                agent_count: count as u32,
+            })
         }
-        "connected" => {
-            tray::update_tray_status(app, true, agent_count.load(Ordering::SeqCst) as u32);
-        }
+        "connected" => Some(TrayUpdate {
+            connected: true,
+            agent_count: agent_count.load(Ordering::SeqCst) as u32,
+        }),
         "disconnected" => {
             agent_count.store(0, Ordering::SeqCst);
-            tray::update_tray_status(app, false, 0);
+            Some(TrayUpdate {
+                connected: false,
+                agent_count: 0,
+            })
         }
-        _ => {}
+        _ => None,
+    }
+}
+
+/// Handle tray-relevant events from the sidecar.
+fn handle_tray_event(
+    app: &AppHandle,
+    event_name: &str,
+    data: &Value,
+    agent_count: &Arc<AtomicU64>,
+) {
+    if let Some(update) = compute_tray_update(event_name, data, agent_count) {
+        tray::update_tray_status(app, update.connected, update.agent_count);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn new_count(n: u64) -> Arc<AtomicU64> {
+        Arc::new(AtomicU64::new(n))
+    }
+
+    #[test]
+    fn connection_status_true_keeps_agent_count() {
+        let c = new_count(3);
+        let u = compute_tray_update("connectionStatus", &json!({"connected": true}), &c)
+            .expect("should emit update");
+        assert_eq!(u, TrayUpdate { connected: true, agent_count: 3 });
+        assert_eq!(c.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn connection_status_false_resets_agent_count() {
+        let c = new_count(3);
+        let u = compute_tray_update("connectionStatus", &json!({"connected": false}), &c)
+            .expect("should emit update");
+        assert_eq!(u, TrayUpdate { connected: false, agent_count: 0 });
+        assert_eq!(c.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn connection_status_missing_connected_defaults_false() {
+        let c = new_count(2);
+        let u = compute_tray_update("connectionStatus", &json!({}), &c).unwrap();
+        assert_eq!(u.connected, false);
+        assert_eq!(u.agent_count, 0);
+    }
+
+    #[test]
+    fn agent_started_increments_both_aliases() {
+        let c = new_count(0);
+        let u1 = compute_tray_update("agentStarted", &json!(null), &c).unwrap();
+        assert_eq!(u1, TrayUpdate { connected: true, agent_count: 1 });
+        let u2 = compute_tray_update("agent_created", &json!(null), &c).unwrap();
+        assert_eq!(u2, TrayUpdate { connected: true, agent_count: 2 });
+    }
+
+    #[test]
+    fn agent_stopped_does_not_underflow() {
+        let c = new_count(0);
+        let u = compute_tray_update("agentStopped", &json!(null), &c).unwrap();
+        assert_eq!(u.agent_count, 0);
+        assert_eq!(c.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn agent_stopped_decrements_normally() {
+        let c = new_count(5);
+        let u = compute_tray_update("agent_closed", &json!(null), &c).unwrap();
+        assert_eq!(u.agent_count, 4);
+    }
+
+    #[test]
+    fn connected_event_reads_but_does_not_reset_count() {
+        let c = new_count(7);
+        let u = compute_tray_update("connected", &json!(null), &c).unwrap();
+        assert_eq!(u, TrayUpdate { connected: true, agent_count: 7 });
+    }
+
+    #[test]
+    fn disconnected_event_resets_count() {
+        let c = new_count(7);
+        let u = compute_tray_update("disconnected", &json!(null), &c).unwrap();
+        assert_eq!(u, TrayUpdate { connected: false, agent_count: 0 });
+        assert_eq!(c.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn unknown_event_returns_none() {
+        let c = new_count(3);
+        assert!(compute_tray_update("someRandomEvent", &json!(null), &c).is_none());
+        // 未知事件不動計數
+        assert_eq!(c.load(Ordering::SeqCst), 3);
     }
 }

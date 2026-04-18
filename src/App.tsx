@@ -7,6 +7,9 @@ import { LoginView } from "./components/LoginView";
 import { MainView } from "./components/MainView";
 import { NoticeBanner } from "./components/NoticeBanner";
 import { useSystemStore } from "./stores/systemStore";
+import { useLocaleStore } from "./i18n";
+import { zhTW } from "./i18n/locales/zh-TW";
+import { en } from "./i18n/locales/en";
 import {
   isAgentStartedPayload,
   isSessionPayload,
@@ -32,12 +35,19 @@ const styles = {
   },
 } as const;
 
+// handleSidecarEvent 在非 React context 下呼叫（Tauri event listener callback），
+// 不能用 useTranslation hook；直接讀當前 locale 對應的字典。
+function dict() {
+  return useLocaleStore.getState().locale === "en" ? en : zhTW;
+}
+
 function handleSidecarEvent(event: SidecarEvent) {
   const { setStatus, setLatency, setAgentCount, setError } =
     useConnectionStore.getState();
   const { addAgent, removeAgent, updateAgent, clearAgents, addTool, removeTool, updateAgentActivity } =
     useAgentStore.getState();
   const { addLog } = useLogStore.getState();
+  const d = dict();
 
   // Rust 發 IpcEvent 序列化為 { event, data }；舊欄位名為 { kind, payload }。
   const kind = (event.kind ?? event.event) as SidecarEvent["kind"];
@@ -47,13 +57,13 @@ function handleSidecarEvent(event: SidecarEvent) {
     case "connected":
       setStatus("connected");
       setError(null);
-      addLog({ timestamp: Date.now(), level: "info", source: "connection", message: "已連線至伺服器" });
+      addLog({ timestamp: Date.now(), level: "info", source: "connection", message: d.log.connected });
       break;
 
     case "disconnected":
       setStatus("disconnected");
       clearAgents();
-      addLog({ timestamp: Date.now(), level: "warn", source: "connection", message: "已中斷與伺服器的連線" });
+      addLog({ timestamp: Date.now(), level: "warn", source: "connection", message: d.log.disconnected });
       break;
 
     case "agent_created":
@@ -74,7 +84,7 @@ function handleSidecarEvent(event: SidecarEvent) {
         level: "info",
         source: "agent",
         agentSessionId: payload.sessionId,
-        message: `代理已啟動: ${payload.projectName || payload.sessionId.slice(0, 8)}`,
+        message: `${d.agents.agentStarted} ${payload.projectName || payload.sessionId.slice(0, 8)}`,
       });
       break;
     }
@@ -91,7 +101,7 @@ function handleSidecarEvent(event: SidecarEvent) {
         level: "info",
         source: "agent",
         agentSessionId: payload.sessionId,
-        message: `代理已停止: ${payload.sessionId.slice(0, 8)}`,
+        message: `${d.agents.agentStopped} ${payload.sessionId.slice(0, 8)}`,
       });
       break;
     }
@@ -114,7 +124,7 @@ function handleSidecarEvent(event: SidecarEvent) {
         level: "debug",
         source: "tool",
         agentSessionId: payload.sessionId,
-        message: `工具已啟動: ${payload.toolName}`,
+        message: `${d.log.toolStarted} ${payload.toolName}`,
       });
       break;
     }
@@ -143,7 +153,9 @@ function handleSidecarEvent(event: SidecarEvent) {
         level: "debug",
         source: "tool",
         agentSessionId: payload.sessionId,
-        message: `工具已完成${payload.toolName ? `: ${payload.toolName}` : ""}`,
+        message: payload.toolName
+          ? `${d.log.toolCompletedWith} ${payload.toolName}`
+          : d.log.toolCompleted,
       });
       break;
     }
@@ -171,7 +183,7 @@ function handleSidecarEvent(event: SidecarEvent) {
         timestamp: Date.now(),
         level: "info",
         source: "connection",
-        message: `連線: ${payload.connected ? "已連線" : "已中斷"}`,
+        message: `${d.log.connectionLabel} ${payload.connected ? d.status.connected : d.status.disconnected}`,
       });
       break;
     }
@@ -183,7 +195,7 @@ function handleSidecarEvent(event: SidecarEvent) {
         level: "info",
         source: "transcript",
         agentSessionId: payload.sessionId,
-        message: payload.summary || payload.message || "對話記錄更新",
+        message: payload.summary || payload.message || d.log.transcriptUpdate,
       });
       break;
     }
@@ -219,7 +231,7 @@ function handleSidecarEvent(event: SidecarEvent) {
         level: "info",
         source: "terminal",
         agentSessionId: payload.sessionId,
-        message: "終端機就緒",
+        message: d.terminal.ready,
       });
       break;
     }
@@ -231,7 +243,7 @@ function handleSidecarEvent(event: SidecarEvent) {
         level: "warn",
         source: "terminal",
         agentSessionId: payload.sessionId,
-        message: `終端機已結束 (代碼: ${payload.code ?? "未知"})`,
+        message: d.terminal.exitedLog.replace("{code}", String(payload.code ?? "?")),
       });
       break;
     }

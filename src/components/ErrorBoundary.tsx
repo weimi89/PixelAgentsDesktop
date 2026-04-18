@@ -1,4 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { useLocaleStore } from "../i18n";
+import { zhTW } from "../i18n/locales/zh-TW";
+import { en } from "../i18n/locales/en";
 
 interface Props {
   children: ReactNode;
@@ -84,18 +87,20 @@ export class ErrorBoundary extends Component<Props, State> {
 
   override render(): ReactNode {
     if (this.state.error) {
+      // ErrorBoundary 是 class 元件，無法用 hook。直接讀當前 locale
+      // 對應的字典即可；不對語言切換做響應式更新（錯誤畫面出現頻率極低）。
+      const locale = useLocaleStore.getState().locale;
+      const dict = locale === "en" ? en : zhTW;
       return (
         <div style={styles.container}>
-          <h1 style={styles.title}>應用程式發生錯誤</h1>
-          <p style={styles.message}>
-            介面遇到未預期的錯誤。您可以嘗試重新載入；若問題持續發生，請檢視下方訊息以便回報。
-          </p>
+          <h1 style={styles.title}>{dict.errors.uncaughtTitle}</h1>
+          <p style={styles.message}>{dict.errors.uncaughtMessage}</p>
           <pre style={styles.stack}>
             {this.state.error.name}: {this.state.error.message}
             {this.state.error.stack ? `\n\n${this.state.error.stack}` : ""}
           </pre>
           <button style={styles.button} onClick={this.handleReload}>
-            重新載入
+            {dict.errors.reload}
           </button>
         </div>
       );

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useSystemStore } from "../stores/systemStore";
+import { useTranslation } from "../i18n";
 
 const COLORS = {
   info: { bg: "#1e2333", border: "#89b4fa", text: "#89b4fa" },
@@ -45,6 +46,7 @@ const styles = {
 export function NoticeBanner() {
   const notice = useSystemStore((s) => s.notice);
   const clearNotice = useSystemStore((s) => s.clearNotice);
+  const t = useTranslation();
 
   useEffect(() => {
     if (!notice || notice.fatal) return;
@@ -66,7 +68,7 @@ export function NoticeBanner() {
         {notice.message}
       </span>
       <button style={styles.button(color)} onClick={clearNotice}>
-        關閉
+        {t("errors.close")}
       </button>
     </div>
   );
