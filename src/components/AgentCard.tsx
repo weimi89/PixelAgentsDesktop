@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { AgentInfo, ToolInfo } from "../stores/agentStore";
+import { memo, useState } from "react";
+import { useAgentStore, type ToolInfo } from "../stores/agentStore";
 import { useTick } from "../hooks/useTick";
 
 const TOOL_COLORS: Record<string, string> = {
@@ -130,10 +130,14 @@ const styles = {
   },
 } as const;
 
-export function AgentCard({ agent }: { agent: AgentInfo }) {
+function AgentCardInner({ sessionId }: { sessionId: string }) {
+  // 以 sessionId 訂閱單一 agent — 只有該 agent 變更時本 card 才重渲染
+  const agent = useAgentStore((s) => s.agents.get(sessionId));
   const [hovered, setHovered] = useState(false);
-  // 訂閱共用 tick 讓「最後活動: N 秒前」能每秒刷新（原本每 5s，略為頻繁但足夠便宜）
+  // 訂閱共用 tick 讓「最後活動: N 秒前」能每秒刷新
   useTick();
+
+  if (!agent) return null;
 
   return (
     <div
@@ -165,3 +169,7 @@ export function AgentCard({ agent }: { agent: AgentInfo }) {
     </div>
   );
 }
+
+/** memo 避免父層 AgentList 重渲染時（例如 sessionId 列表未變但父層 state 改變）
+ *  所有 AgentCard 一起跟著跑 selector，即使各自 agent 未變。 */
+export const AgentCard = memo(AgentCardInner);

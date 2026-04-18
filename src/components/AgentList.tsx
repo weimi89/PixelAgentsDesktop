@@ -1,3 +1,4 @@
+import { useShallow } from "zustand/react/shallow";
 import { useAgentStore } from "../stores/agentStore";
 import { AgentCard } from "./AgentCard";
 
@@ -31,10 +32,13 @@ const styles = {
 } as const;
 
 export function AgentList() {
-  const agents = useAgentStore((s) => s.agents);
-  const agentList = Array.from(agents.values());
+  // 只訂閱 sessionId 陣列 — 單一 agent 的 tool/狀態變化不會讓 AgentList 重渲染；
+  // useShallow 以淺比較避免每次返回新 array 引用導致誤判更新。
+  const sessionIds = useAgentStore(
+    useShallow((s) => Array.from(s.agents.keys())),
+  );
 
-  if (agentList.length === 0) {
+  if (sessionIds.length === 0) {
     return (
       <div style={styles.empty}>
         <div style={styles.emptyIcon}>[  ]</div>
@@ -49,8 +53,8 @@ export function AgentList() {
 
   return (
     <div style={styles.container}>
-      {agentList.map((agent) => (
-        <AgentCard key={agent.sessionId} agent={agent} />
+      {sessionIds.map((sessionId) => (
+        <AgentCard key={sessionId} sessionId={sessionId} />
       ))}
     </div>
   );
