@@ -115,6 +115,11 @@ export const en: Dictionary = {
     language: "Language",
     languageZh: "繁體中文",
     languageEn: "English",
+    languageJa: "日本語",
+    theme: "Theme",
+    themeSystem: "System",
+    themeDark: "Dark",
+    themeLight: "Light",
   },
   updater: {
     check: "Check for updates",
@@ -125,6 +130,16 @@ export const en: Dictionary = {
     installing: "Downloading, please don't close the app...",
     notConfigured: "This build has no update server configured",
     error: "Update check failed: {message}",
+  },
+  crashes: {
+    title: "Crash logs",
+    count: "{n} entries",
+    none: "No crash logs",
+    path: "Location",
+    openFolder: "Open folder",
+    clear: "Clear (move to archive)",
+    cleared: "Moved {n} to archive",
+    refresh: "Refresh",
   },
   diagnostics: {
     title: "Diagnostics",

@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { useLocaleStore } from "../i18n";
 import { zhTW } from "../i18n/locales/zh-TW";
 import { en } from "../i18n/locales/en";
+import { ja } from "../i18n/locales/ja";
 import { reportCrash } from "../tauri-api";
 
 interface Props {
@@ -97,7 +98,7 @@ export class ErrorBoundary extends Component<Props, State> {
       // ErrorBoundary 是 class 元件，無法用 hook。直接讀當前 locale
       // 對應的字典即可；不對語言切換做響應式更新（錯誤畫面出現頻率極低）。
       const locale = useLocaleStore.getState().locale;
-      const dict = locale === "en" ? en : zhTW;
+      const dict = locale === "en" ? en : locale === "ja" ? ja : zhTW;
       return (
         <div style={styles.container}>
           <h1 style={styles.title}>{dict.errors.uncaughtTitle}</h1>

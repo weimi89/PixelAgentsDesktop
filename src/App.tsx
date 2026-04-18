@@ -7,9 +7,12 @@ import { LoginView } from "./components/LoginView";
 import { MainView } from "./components/MainView";
 import { NoticeBanner } from "./components/NoticeBanner";
 import { useSystemStore } from "./stores/systemStore";
+import { ThemeApplier } from "./theme/ThemeApplier";
+import { useThemeColors } from "./theme";
 import { useLocaleStore } from "./i18n";
 import { zhTW } from "./i18n/locales/zh-TW";
 import { en } from "./i18n/locales/en";
+import { ja } from "./i18n/locales/ja";
 import {
   isAgentStartedPayload,
   isSessionPayload,
@@ -23,22 +26,28 @@ import {
   isTerminalExitPayload,
 } from "./lib/validators";
 
-const styles = {
-  container: {
-    display: "flex",
-    flexDirection: "column" as const,
-    height: "100vh",
-    background: "#1e1e2e",
-    color: "#cdd6f4",
-    fontFamily: "monospace, system-ui, -apple-system, sans-serif",
-    margin: 0,
-  },
-} as const;
+const useStyles = () => {
+  const c = useThemeColors();
+  return {
+    container: {
+      display: "flex",
+      flexDirection: "column" as const,
+      height: "100vh",
+      background: c.bg,
+      color: c.text,
+      fontFamily: "monospace, system-ui, -apple-system, sans-serif",
+      margin: 0,
+    },
+  } as const;
+};
 
 // handleSidecarEvent 在非 React context 下呼叫（Tauri event listener callback），
 // 不能用 useTranslation hook；直接讀當前 locale 對應的字典。
 function dict() {
-  return useLocaleStore.getState().locale === "en" ? en : zhTW;
+  const locale = useLocaleStore.getState().locale;
+  if (locale === "en") return en;
+  if (locale === "ja") return ja;
+  return zhTW;
 }
 
 function handleSidecarEvent(event: SidecarEvent) {
@@ -270,6 +279,7 @@ function handleReadyEvent(event: SidecarEvent): void {
 
 function App() {
   const status = useConnectionStore((s) => s.status);
+  const styles = useStyles();
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;
@@ -310,6 +320,7 @@ function App() {
 
   return (
     <div style={styles.container}>
+      <ThemeApplier />
       <NoticeBanner />
       {isConnected ? <MainView /> : <LoginView />}
     </div>

@@ -76,6 +76,11 @@ body {
   color: var(--pixel-text);
 }
 
+/* Light theme selection with accent at lower alpha */
+html[data-theme="light"] ::selection {
+  background: rgba(30, 102, 245, 0.2);
+}
+
 /* Focus styles */
 :focus-visible {
   outline: 1px solid var(--pixel-accent);

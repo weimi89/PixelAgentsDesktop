@@ -57,6 +57,83 @@ fn sanitize(s: &str) -> String {
         .collect()
 }
 
+/// 列出 ~/.pixel-agents/crashes/ 中的 crash log（不含 archive/）。
+#[tauri::command]
+pub async fn list_crashes() -> Result<Value, String> {
+    let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
+    let crash_dir = home.join(".pixel-agents").join("crashes");
+    if !crash_dir.exists() {
+        return Ok(json!({ "count": 0, "path": crash_dir.to_string_lossy(), "entries": [] }));
+    }
+
+    let mut entries: Vec<Value> = Vec::new();
+    if let Ok(iter) = fs::read_dir(&crash_dir) {
+        for e in iter.flatten() {
+            let ft = match e.file_type() {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            if !ft.is_file() {
+                continue;
+            }
+            if e.path().extension().and_then(|x| x.to_str()) != Some("json") {
+                continue;
+            }
+            let meta = e.metadata().ok();
+            let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+            let modified = meta
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            entries.push(json!({
+                "name": e.file_name().to_string_lossy(),
+                "size": size,
+                "modifiedAt": modified,
+            }));
+        }
+    }
+    entries.sort_by(|a, b| {
+        let am = a["modifiedAt"].as_u64().unwrap_or(0);
+        let bm = b["modifiedAt"].as_u64().unwrap_or(0);
+        bm.cmp(&am)
+    });
+
+    Ok(json!({
+        "count": entries.len(),
+        "path": crash_dir.to_string_lossy(),
+        "entries": entries,
+    }))
+}
+
+/// 將 crash log 搬移至 archive/ 而非刪除（符合專案檔案整理規則）。
+#[tauri::command]
+pub async fn clear_crashes() -> Result<Value, String> {
+    let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
+    let crash_dir = home.join(".pixel-agents").join("crashes");
+    if !crash_dir.exists() {
+        return Ok(json!({ "moved": 0 }));
+    }
+    let archive = crash_dir.join("archive");
+    fs::create_dir_all(&archive)
+        .map_err(|e| format!("Failed to create archive dir: {e}"))?;
+
+    let mut moved = 0u32;
+    if let Ok(iter) = fs::read_dir(&crash_dir) {
+        for e in iter.flatten() {
+            if e.file_type().ok().map(|t| t.is_file()).unwrap_or(false)
+                && e.path().extension().and_then(|x| x.to_str()) == Some("json")
+            {
+                let target = archive.join(e.file_name());
+                if fs::rename(e.path(), target).is_ok() {
+                    moved += 1;
+                }
+            }
+        }
+    }
+    Ok(json!({ "moved": moved }))
+}
+
 fn rotate_crash_logs(dir: &std::path::Path) -> std::io::Result<()> {
     const MAX_ACTIVE: usize = 20;
     let mut entries: Vec<_> = fs::read_dir(dir)?

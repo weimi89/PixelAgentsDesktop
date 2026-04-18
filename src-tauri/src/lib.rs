@@ -59,6 +59,8 @@ pub fn run() {
             commands::logout,
             commands::get_diagnostics,
             commands::report_crash,
+            commands::list_crashes,
+            commands::clear_crashes,
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {

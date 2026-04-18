@@ -169,6 +169,25 @@ export async function reportCrash(
   }
 }
 
+export interface CrashEntry {
+  name: string;
+  size: number;
+  modifiedAt: number;
+}
+export interface CrashListing {
+  count: number;
+  path: string;
+  entries: CrashEntry[];
+}
+
+export async function listCrashes(): Promise<CrashListing> {
+  return invoke<CrashListing>("list_crashes");
+}
+
+export async function clearCrashes(): Promise<{ moved: number }> {
+  return invoke<{ moved: number }>("clear_crashes");
+}
+
 // --- Event listeners ---
 //
 // SidecarEventKind lists every event `event` value that the sidecar emits

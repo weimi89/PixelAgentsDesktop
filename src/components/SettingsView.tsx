@@ -2,10 +2,19 @@ import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useConnectionStore } from "../stores/connectionStore";
 import { useSettingsStore } from "../stores/settingsStore";
-import { disconnect, loadConfig, getDiagnostics, type DiagnosticsSnapshot } from "../tauri-api";
+import {
+  disconnect,
+  loadConfig,
+  getDiagnostics,
+  listCrashes,
+  clearCrashes,
+  type DiagnosticsSnapshot,
+  type CrashListing,
+} from "../tauri-api";
 import { invoke } from "@tauri-apps/api/core";
 import { useLocaleStore, useTranslation, type LocaleCode } from "../i18n";
 import { checkForUpdate, type UpdateCheckResult } from "../lib/updater";
+import { useThemeStore, type ThemeMode } from "../theme";
 
 const APP_VERSION = "0.1.0";
 const GITHUB_URL = "https://github.com/nicepkg/pixel-agents-desktop";
@@ -179,6 +188,8 @@ export function SettingsView() {
   const t = useTranslation();
   const locale = useLocaleStore((s) => s.locale);
   const setLocale = useLocaleStore((s) => s.setLocale);
+  const themeMode = useThemeStore((s) => s.mode);
+  const setThemeMode = useThemeStore((s) => s.setMode);
   // 只訂閱需要的欄位，避免其他 connection state 變化（例如 latency 更新）
   // 造成整個設定畫面重渲染
   const serverUrl = useConnectionStore((s) => s.serverUrl);
@@ -213,6 +224,8 @@ export function SettingsView() {
   const [configUsername, setConfigUsername] = useState<string | null>(null);
   const [autoStartEnabled, setAutoStartEnabled] = useState<boolean | null>(null);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsSnapshot | null>(null);
+  const [crashes, setCrashes] = useState<CrashListing | null>(null);
+  const [clearMessage, setClearMessage] = useState<string | null>(null);
   const [updateState, setUpdateState] = useState<
     | { kind: "idle" }
     | { kind: "checking" }
@@ -251,6 +264,31 @@ export function SettingsView() {
   useEffect(() => {
     refreshDiagnostics();
   }, []);
+
+  const refreshCrashes = () => {
+    void listCrashes()
+      .then((c) => setCrashes(c))
+      .catch(() => setCrashes(null));
+  };
+  useEffect(() => {
+    refreshCrashes();
+  }, []);
+
+  const handleOpenCrashFolder = () => {
+    if (!crashes?.path) return;
+    void invoke("plugin:shell|open", { path: crashes.path }).catch(() => {});
+  };
+
+  const handleClearCrashes = async () => {
+    try {
+      const res = await clearCrashes();
+      setClearMessage(t("crashes.cleared", { n: res.moved }));
+      refreshCrashes();
+      setTimeout(() => setClearMessage(null), 3000);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const handleCheckUpdate = async () => {
     setUpdateState({ kind: "checking" });
@@ -409,6 +447,28 @@ export function SettingsView() {
           >
             <option value="zh-TW">{t("settingsExtra.languageZh")}</option>
             <option value="en">{t("settingsExtra.languageEn")}</option>
+            <option value="ja">{t("settingsExtra.languageJa")}</option>
+          </select>
+        </div>
+        <div style={styles.row}>
+          <span style={styles.label}>{t("settingsExtra.theme")}</span>
+          <select
+            style={{
+              background: "#1e1e2e",
+              color: "#cdd6f4",
+              border: "2px solid #45475a",
+              borderRadius: 0,
+              padding: "4px 8px",
+              fontFamily: "monospace",
+              fontSize: "12px",
+              cursor: "pointer",
+            }}
+            value={themeMode}
+            onChange={(e) => setThemeMode(e.target.value as ThemeMode)}
+          >
+            <option value="system">{t("settingsExtra.themeSystem")}</option>
+            <option value="dark">{t("settingsExtra.themeDark")}</option>
+            <option value="light">{t("settingsExtra.themeLight")}</option>
           </select>
         </div>
         <div
@@ -495,6 +555,51 @@ export function SettingsView() {
               <button style={styles.smallButton} onClick={refreshDiagnostics}>
                 {t("diagnostics.refresh")}
               </button>
+            </div>
+          </>
+        ) : (
+          <span style={styles.emptyText}>{t("diagnostics.loading")}</span>
+        )}
+      </div>
+
+      {/* Crash Logs Section */}
+      <div style={styles.section}>
+        <h3 style={styles.sectionTitle}>{t("crashes.title")}</h3>
+        {crashes ? (
+          <>
+            <div style={styles.row}>
+              <span style={styles.label}>{t("crashes.count", { n: crashes.count })}</span>
+              {crashes.count > 0 ? (
+                <span style={{ ...styles.value, color: "#f38ba8" }}>⚠ {crashes.count}</span>
+              ) : (
+                <span style={{ ...styles.value, color: "#a6e3a1" }}>{t("crashes.none")}</span>
+              )}
+            </div>
+            <div style={styles.row}>
+              <span style={styles.label}>{t("crashes.path")}</span>
+              <span style={{ ...styles.value, fontSize: "11px", maxWidth: "320px", overflow: "hidden", textOverflow: "ellipsis" }} title={crashes.path}>
+                {crashes.path}
+              </span>
+            </div>
+            <div style={styles.rowLast}>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                {clearMessage && (
+                  <span style={{ ...styles.value, color: "#a6e3a1", fontSize: "11px" }}>
+                    {clearMessage}
+                  </span>
+                )}
+                <button style={styles.smallButton} onClick={refreshCrashes}>
+                  {t("crashes.refresh")}
+                </button>
+                <button style={styles.smallButton} onClick={handleOpenCrashFolder}>
+                  {t("crashes.openFolder")}
+                </button>
+                {crashes.count > 0 && (
+                  <button style={styles.smallButton} onClick={handleClearCrashes}>
+                    {t("crashes.clear")}
+                  </button>
+                )}
+              </div>
             </div>
           </>
         ) : (

@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+# 同一個 tag 只能跑一次
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create draft release
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+      - name: Create GitHub release
+        id: create
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: context.ref.replace('refs/tags/', ''),
+              name: `Pixel Agents Desktop v${{ steps.version.outputs.version }}`,
+              body: '詳細變更請見 CHANGELOG.md。',
+              draft: true,
+              prerelease: false,
+            });
+            core.setOutput('release_id', data.id);
+
+  build:
+    name: Build on ${{ matrix.os }}
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install Linux system deps
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Build sidecar
+        run: node scripts/build-sidecar.mjs
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 自動更新簽章（若已設定 Secret）
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS 代碼簽章與公證（若已設定 Secret）
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Windows Authenticode（若已設定 Secret）
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        with:
+          releaseId: ${{ needs.create-release.outputs.release_id }}
+          args: --target ${{ matrix.target }}
+
+  publish-release:
+    name: Publish release
+    needs: [create-release, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish draft
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.create-release.outputs.release_id }},
+              draft: false,
+            });

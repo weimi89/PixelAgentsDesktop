@@ -115,6 +115,11 @@ export const zhTW = {
     language: "語言",
     languageZh: "繁體中文",
     languageEn: "English",
+    languageJa: "日本語",
+    theme: "主題",
+    themeSystem: "跟隨系統",
+    themeDark: "深色",
+    themeLight: "淺色",
   },
   updater: {
     check: "檢查更新",
@@ -125,6 +130,16 @@ export const zhTW = {
     installing: "下載中，請勿關閉應用...",
     notConfigured: "此建置尚未設定更新伺服器",
     error: "檢查更新失敗：{message}",
+  },
+  crashes: {
+    title: "崩潰紀錄",
+    count: "{n} 筆",
+    none: "無崩潰紀錄",
+    path: "位置",
+    openFolder: "開啟資料夾",
+    clear: "清除（搬移至 archive）",
+    cleared: "已搬移 {n} 筆至 archive",
+    refresh: "重新整理",
   },
   diagnostics: {
     title: "診斷",

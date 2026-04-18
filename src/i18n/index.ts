@@ -1,12 +1,14 @@
 import { create } from "zustand";
 import { zhTW, type Dictionary } from "./locales/zh-TW";
 import { en } from "./locales/en";
+import { ja } from "./locales/ja";
 
-export type LocaleCode = "zh-TW" | "en";
+export type LocaleCode = "zh-TW" | "en" | "ja";
 
 const DICTIONARIES: Record<LocaleCode, Dictionary> = {
   "zh-TW": zhTW,
   en: en,
+  ja: ja,
 };
 
 /** 從「a.b.c」路徑取巢狀值 */
@@ -40,8 +42,10 @@ export const useLocaleStore = create<LocaleState>((set) => ({
 function detectInitialLocale(): LocaleCode {
   if (typeof navigator !== "undefined") {
     const lang = navigator.language || "";
-    if (lang.toLowerCase().startsWith("zh")) return "zh-TW";
-    if (lang.toLowerCase().startsWith("en")) return "en";
+    const lower = lang.toLowerCase();
+    if (lower.startsWith("zh")) return "zh-TW";
+    if (lower.startsWith("ja")) return "ja";
+    if (lower.startsWith("en")) return "en";
   }
   return "zh-TW";
 }
