@@ -233,7 +233,8 @@ export function TerminalPanel() {
   // Auto-select first agent if none selected
   useEffect(() => {
     if (!selectedSessionId && agentList.length > 0) {
-      setSelectedSessionId(agentList[0].sessionId);
+      const first = agentList[0];
+      if (first) setSelectedSessionId(first.sessionId);
     }
     // If the selected agent was removed, clear selection
     if (selectedSessionId && !agents.has(selectedSessionId)) {

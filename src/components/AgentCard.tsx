@@ -27,9 +27,12 @@ const TOOL_COLORS: Record<string, string> = {
 
 function getToolColor(toolName: string): string {
   // Direct match
-  if (TOOL_COLORS[toolName]) return TOOL_COLORS[toolName];
+  const direct = TOOL_COLORS[toolName];
+  if (direct) return direct;
   // MCP tools
-  if (toolName.startsWith("mcp_") || toolName.startsWith("mcp__")) return TOOL_COLORS.mcp;
+  if (toolName.startsWith("mcp_") || toolName.startsWith("mcp__")) {
+    return TOOL_COLORS.mcp ?? "#a6adc8";
+  }
   // Fallback
   return "#a6adc8";
 }

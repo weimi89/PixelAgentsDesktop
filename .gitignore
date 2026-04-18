@@ -5,3 +5,19 @@ sidecar/dist/
 sidecar/node_modules/
 *.DS_Store
 .env
+.env.local
+
+# IDE / tooling caches
+.serena/
+.vscode/
+.idea/
+
+# Test artifacts
+coverage/
+
+# 檔案搬移備份（依 CLAUDE.md 規則保留而不刪除）
+backups/
+
+# Tauri 自動生成的 schema（每次 tauri-build 會更新；不該進版控）
+src-tauri/gen/schemas/
+

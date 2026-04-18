@@ -63,13 +63,13 @@ const styles = {
  * 讓使用者可以重新載入而非看到白屏。
  */
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { error: null };
+  override state: State = { error: null };
 
   static getDerivedStateFromError(error: Error): State {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo): void {
+  override componentDidCatch(error: Error, info: ErrorInfo): void {
     // 輸出到 stderr；Tauri 側 env_logger 會寫入系統日誌
     console.error("[ErrorBoundary] Uncaught error:", error, info.componentStack);
   }
@@ -82,7 +82,7 @@ export class ErrorBoundary extends Component<Props, State> {
     }, 50);
   };
 
-  render(): ReactNode {
+  override render(): ReactNode {
     if (this.state.error) {
       return (
         <div style={styles.container}>
