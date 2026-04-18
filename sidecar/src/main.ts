@@ -313,17 +313,26 @@ function main(): void {
     process.exit(0);
   });
 
-  // Handle uncaught errors gracefully
+  // Handle uncaught errors gracefully — 發送結構化 fatal 事件讓 Rust 端
+  // 轉為 sidecar-crash 事件並由前端 ErrorBoundary/App.tsx 持久化到
+  // ~/.pixel-agents/crashes/
   process.on('uncaughtException', (err) => {
     origConsoleError('[sidecar] uncaught exception:', err);
-    sendEvent('log', { level: 'fatal', message: err.message });
+    sendEvent('sidecarFatal', {
+      kind: 'uncaughtException',
+      message: err.message,
+      stack: err.stack ?? null,
+    });
   });
 
   process.on('unhandledRejection', (reason) => {
     origConsoleError('[sidecar] unhandled rejection:', reason);
-    sendEvent('log', {
-      level: 'fatal',
-      message: reason instanceof Error ? reason.message : String(reason),
+    const message = reason instanceof Error ? reason.message : String(reason);
+    const stack = reason instanceof Error ? reason.stack ?? null : null;
+    sendEvent('sidecarFatal', {
+      kind: 'unhandledRejection',
+      message,
+      stack,
     });
   });
 }

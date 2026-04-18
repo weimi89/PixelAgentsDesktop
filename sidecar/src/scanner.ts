@@ -100,6 +100,19 @@ export class Scanner {
 		}
 	}
 
+	/**
+	 * 立即觸發一次掃描，不等下一個 tick。
+	 *
+	 * 使用情境：
+	 *  - Socket.IO 重連後需要盡快把現有 session 重新註冊到伺服器
+	 *  - 伺服器 resumeSession 請求來時加速 session 復原
+	 *
+	 * 內建 scanning 重入保護會跳過若當前已有 scan 在進行中。
+	 */
+	forceScan(): void {
+		void this.scan();
+	}
+
 	private async scan(): Promise<void> {
 		if (this.scanning) return;
 		this.scanning = true;
@@ -112,7 +125,13 @@ export class Scanner {
 
 	private async scanInner(): Promise<void> {
 		{
-			const projectsRoot = path.join(os.homedir(), '.claude', 'projects');
+			// 依序嘗試 Claude Code 可能的 projects 目錄位置：
+			//  1. ~/.claude/projects — macOS / 當前 Linux 主流安裝
+			//  2. $XDG_DATA_HOME/claude/projects 或 ~/.local/share/claude/projects — XDG 規範
+			//  3. ~/.config/claude/projects — 舊版或客製路徑
+			// 取第一個存在的目錄；全部不存在時當作無 session。
+			const projectsRoot = await findProjectsRoot();
+			if (!projectsRoot) return;
 			let projectDirs: string[];
 			try {
 				const entries = await fsp.readdir(projectsRoot, { withFileTypes: true });
@@ -188,6 +207,34 @@ export class Scanner {
 			});
 		}
 	}
+}
+
+/**
+ * 依序嘗試常見的 Claude Code projects 目錄位置，回傳第一個存在的絕對路徑。
+ *
+ * 目前 macOS / Linux 實務上 Claude Code CLI 統一使用 `~/.claude/projects`；
+ * 本 helper 保留其他候選路徑供未來 Claude Code 改走 XDG 規範時自動適配，
+ * 使用者不需改設定。
+ */
+async function findProjectsRoot(): Promise<string | null> {
+	const home = os.homedir();
+	const xdg = process.env.XDG_DATA_HOME;
+	const candidates = [
+		path.join(home, '.claude', 'projects'),
+		xdg ? path.join(xdg, 'claude', 'projects') : null,
+		path.join(home, '.local', 'share', 'claude', 'projects'),
+		path.join(home, '.config', 'claude', 'projects'),
+	].filter((p): p is string => !!p);
+
+	for (const dir of candidates) {
+		try {
+			const stat = await fsp.stat(dir);
+			if (stat.isDirectory()) return dir;
+		} catch {
+			// 不存在 — 試下一個
+		}
+	}
+	return null;
 }
 
 /** 以最大並行度 limit 執行 async 任務（簡化版 p-limit） */

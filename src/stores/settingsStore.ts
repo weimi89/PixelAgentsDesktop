@@ -29,6 +29,7 @@ export type DesktopSettings = {
   excludedProjects: string[];
   autoStart: boolean;
   startMinimized: boolean;
+  telemetryEnabled: boolean;
 };
 
 const DEFAULT_SETTINGS: DesktopSettings = DESKTOP_SETTINGS_DEFAULTS;
@@ -74,6 +75,7 @@ interface SettingsState extends DesktopSettings {
   removeExcludedProject: (project: string) => void;
   setAutoStart: (enabled: boolean) => void;
   setStartMinimized: (enabled: boolean) => void;
+  setTelemetryEnabled: (enabled: boolean) => void;
   loadSettings: () => Promise<void>;
   saveSettings: () => Promise<void>;
 }
@@ -114,6 +116,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     schedulePersist(snapshotFromState(get()));
   },
 
+  setTelemetryEnabled: (enabled: boolean) => {
+    set({ telemetryEnabled: enabled });
+    schedulePersist(snapshotFromState(get()));
+  },
+
   loadSettings: async () => {
     try {
       const raw = await invoke<unknown>("load_settings");
@@ -141,6 +148,7 @@ function snapshotFromState(state: SettingsState): DesktopSettings {
     excludedProjects: state.excludedProjects,
     autoStart: state.autoStart,
     startMinimized: state.startMinimized,
+    telemetryEnabled: state.telemetryEnabled,
   };
 }
 

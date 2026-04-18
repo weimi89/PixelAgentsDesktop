@@ -229,6 +229,7 @@ export type SidecarEventKind =
   | "toolDone"
   | "subtaskStart"
   | "subtaskDone"
+  | "subtaskClear"
   // Agent state
   | "agent_status"
   | "statusChange"
@@ -242,6 +243,7 @@ export type SidecarEventKind =
   | "error"
   | "log"
   | "ready"
+  | "sidecarFatal"
   // Terminal
   | "terminalData"
   | "terminalReady"

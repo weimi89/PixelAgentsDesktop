@@ -77,6 +77,20 @@ export function isAgentStatusPayload(p: unknown): p is AgentStatusPayload {
   return r.status === "active" || r.status === "idle";
 }
 
+/** statusChange 事件 — 由 sidecar parser.ts 發出，指示 agent 在等待
+ *  使用者輸入（waiting）、請求權限（permission）、或閒置（idle）。
+ *  與 agent_status 不同：statusChange 是 Claude Code 主動生命週期事件，
+ *  agent_status 是應用層推導的 active/idle。 */
+export interface StatusChangePayload extends SessionPayload {
+  status: "waiting" | "permission" | "idle";
+}
+
+export function isStatusChangePayload(p: unknown): p is StatusChangePayload {
+  if (!isSessionPayload(p)) return false;
+  const r = p as unknown as Record<string, unknown>;
+  return r.status === "waiting" || r.status === "permission" || r.status === "idle";
+}
+
 export interface ConnectionStatusPayload {
   connected: boolean;
   status?: string;
@@ -133,6 +147,10 @@ export interface DesktopSettingsShape {
   excludedProjects: string[];
   autoStart: boolean;
   startMinimized: boolean;
+  /** 遙測 / 錯誤回報的同意狀態。預設 `false`（opt-in 而非 opt-out）。
+   *  目前只是預留欄位；未來接入 Sentry 等服務時，只有此欄位 true
+   *  才會發送任何 telemetry。 */
+  telemetryEnabled: boolean;
 }
 
 export const DESKTOP_SETTINGS_DEFAULTS: DesktopSettingsShape = {
@@ -140,6 +158,7 @@ export const DESKTOP_SETTINGS_DEFAULTS: DesktopSettingsShape = {
   excludedProjects: [],
   autoStart: false,
   startMinimized: false,
+  telemetryEnabled: false,
 };
 
 const SCAN_INTERVAL_MIN = 500;
@@ -187,6 +206,12 @@ export function parseDesktopSettings(raw: unknown): DesktopSettingsShape {
     out.startMinimized = raw.startMinimized;
   } else if (raw.startMinimized !== undefined) {
     warnings.push("startMinimized 型別錯誤，需為 boolean");
+  }
+
+  if (typeof raw.telemetryEnabled === "boolean") {
+    out.telemetryEnabled = raw.telemetryEnabled;
+  } else if (raw.telemetryEnabled !== undefined) {
+    warnings.push("telemetryEnabled 型別錯誤，需為 boolean");
   }
 
   if (warnings.length > 0) {

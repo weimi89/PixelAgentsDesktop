@@ -13,7 +13,7 @@
  * 6. **關於**：版本、更新檢查（見 [[UpdateStatus]]）、GitHub 連結
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useConnectionStore } from "../stores/connectionStore";
 import { useSettingsStore } from "../stores/settingsStore";
@@ -23,16 +23,39 @@ import {
   getDiagnostics,
   listCrashes,
   clearCrashes,
+  saveSettings,
   type DiagnosticsSnapshot,
   type CrashListing,
 } from "../tauri-api";
+import { parseDesktopSettings } from "../lib/validators";
 import { invoke } from "@tauri-apps/api/core";
 import { useLocaleStore, useTranslation, type LocaleCode } from "../i18n";
 import { checkForUpdate, type UpdateCheckResult } from "../lib/updater";
 import { useThemeStore, useThemeColors, type ThemeMode } from "../theme";
 
 const APP_VERSION = "0.1.0";
-const GITHUB_URL = "https://github.com/nicepkg/pixel-agents-desktop";
+const GITHUB_URL = "https://github.com/weimi89/PixelAgentsDesktop";
+
+/** 將診斷快照 + 應用元資料打包成 JSON 檔下載，供使用者回報 bug 時附加。
+ *  不含任何個資（tokens 等已經不在 diagnostics 裡）。 */
+function exportDiagnosticsJson(diag: DiagnosticsSnapshot | null): void {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    appVersion: APP_VERSION,
+    userAgent: navigator.userAgent,
+    platform: typeof navigator !== "undefined" ? navigator.platform : "unknown",
+    diagnostics: diag,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `pixel-agents-diagnostics-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function useStyles() {
   const c = useThemeColors();
@@ -194,10 +217,12 @@ export function SettingsView() {
     autoStart,
     startMinimized,
     loaded,
+    telemetryEnabled,
     setScanInterval,
     addExcludedProject,
     removeExcludedProject,
     setStartMinimized,
+    setTelemetryEnabled,
     loadSettings,
   } = useSettingsStore(
     useShallow((s) => ({
@@ -205,11 +230,13 @@ export function SettingsView() {
       excludedProjects: s.excludedProjects,
       autoStart: s.autoStart,
       startMinimized: s.startMinimized,
+      telemetryEnabled: s.telemetryEnabled,
       loaded: s.loaded,
       setScanInterval: s.setScanInterval,
       addExcludedProject: s.addExcludedProject,
       removeExcludedProject: s.removeExcludedProject,
       setStartMinimized: s.setStartMinimized,
+      setTelemetryEnabled: s.setTelemetryEnabled,
       loadSettings: s.loadSettings,
     })),
   );
@@ -221,6 +248,8 @@ export function SettingsView() {
   const [diagnostics, setDiagnostics] = useState<DiagnosticsSnapshot | null>(null);
   const [crashes, setCrashes] = useState<CrashListing | null>(null);
   const [clearMessage, setClearMessage] = useState<string | null>(null);
+  const [importMessage, setImportMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [updateState, setUpdateState] = useState<
     | { kind: "idle" }
     | { kind: "checking" }
@@ -272,6 +301,49 @@ export function SettingsView() {
   const handleOpenCrashFolder = () => {
     if (!crashes?.path) return;
     void invoke("plugin:shell|open", { path: crashes.path }).catch(() => {});
+  };
+
+  const handleExportSettings = () => {
+    const payload = {
+      scanIntervalMs,
+      excludedProjects,
+      autoStart,
+      startMinimized,
+      telemetryEnabled,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pixel-agents-settings-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportSettings = async (file: File) => {
+    try {
+      const text = await file.text();
+      const raw: unknown = JSON.parse(text);
+      const parsed = parseDesktopSettings(raw);
+      // parseDesktopSettings 保證型別正確；個別欄位透過 setter 應用
+      setScanInterval(parsed.scanIntervalMs);
+      // excludedProjects 以 removeAll + addAll 的方式同步，避免 setter 介面缺失
+      for (const p of excludedProjects) removeExcludedProject(p);
+      for (const p of parsed.excludedProjects) addExcludedProject(p);
+      setAutoStart(parsed.autoStart);
+      setStartMinimized(parsed.startMinimized);
+      setTelemetryEnabled(parsed.telemetryEnabled);
+      // 完整快照立即寫盤，不依賴 debounce
+      await saveSettings(parsed);
+      setImportMessage({ ok: true, text: t("settings.importOk") });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setImportMessage({ ok: false, text: t("settings.importFailed", { message: msg }) });
+    } finally {
+      setTimeout(() => setImportMessage(null), 4000);
+    }
   };
 
   const handleClearCrashes = async () => {
@@ -499,6 +571,56 @@ export function SettingsView() {
           />
           <span style={styles.label}>{t("settings.startMinimized")}</span>
         </div>
+        <div
+          style={styles.checkboxRow}
+          onClick={() => setTelemetryEnabled(!telemetryEnabled)}
+          title={t("settings.telemetryHint")}
+        >
+          <input
+            type="checkbox"
+            style={styles.checkbox}
+            checked={telemetryEnabled}
+            onChange={() => {}}
+          />
+          <span style={styles.label}>{t("settings.telemetry")}</span>
+        </div>
+        <div style={styles.rowLast}>
+          <span style={styles.label}>{t("settings.exportSettings")}</span>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            {importMessage && (
+              <span
+                style={{
+                  ...styles.value,
+                  color: importMessage.ok ? c.success : c.error,
+                  fontSize: "11px",
+                }}
+              >
+                {importMessage.text}
+              </span>
+            )}
+            <button style={styles.smallButton} onClick={handleExportSettings}>
+              {t("settings.exportSettings")}
+            </button>
+            <button
+              style={styles.smallButton}
+              onClick={() => importInputRef.current?.click()}
+            >
+              {t("settings.importSettings")}
+            </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json,.json"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handleImportSettings(file);
+                // 重置 input value 讓連續選同一檔也觸發 onChange
+                e.target.value = "";
+              }}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Diagnostics Section */}
@@ -547,9 +669,17 @@ export function SettingsView() {
               <span style={styles.value}>{diagnostics.http.retries}</span>
             </div>
             <div style={styles.rowLast}>
-              <button style={styles.smallButton} onClick={refreshDiagnostics}>
-                {t("diagnostics.refresh")}
-              </button>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button style={styles.smallButton} onClick={refreshDiagnostics}>
+                  {t("diagnostics.refresh")}
+                </button>
+                <button
+                  style={styles.smallButton}
+                  onClick={() => exportDiagnosticsJson(diagnostics)}
+                >
+                  {t("diagnostics.export")}
+                </button>
+              </div>
             </div>
           </>
         ) : (

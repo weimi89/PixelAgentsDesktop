@@ -23,6 +23,7 @@ describe("parseDesktopSettings", () => {
       excludedProjects: ["a", "b"],
       autoStart: true,
       startMinimized: true,
+      telemetryEnabled: true,
     };
     expect(parseDesktopSettings(input)).toEqual(input);
   });

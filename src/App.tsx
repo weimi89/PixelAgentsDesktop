@@ -18,7 +18,7 @@ import { useEffect } from "react";
 import { useConnectionStore } from "./stores/connectionStore";
 import { useAgentStore } from "./stores/agentStore";
 import { useLogStore } from "./stores/logStore";
-import { setupEventListeners, reportCrash, type SidecarEvent } from "./tauri-api";
+import { setupEventListeners, reportCrash, getStatus, type SidecarEvent } from "./tauri-api";
 import { LoginView } from "./components/LoginView";
 import { MainView } from "./components/MainView";
 import { NoticeBanner } from "./components/NoticeBanner";
@@ -40,6 +40,7 @@ import {
   isLatencyPayload,
   isErrorPayload,
   isTerminalExitPayload,
+  isStatusChangePayload,
 } from "./lib/validators";
 
 const useStyles = () => {
@@ -195,6 +196,51 @@ function handleSidecarEvent(event: SidecarEvent) {
       break;
     }
 
+    case "statusChange": {
+      // Claude Code 原生狀態事件（waiting / permission / idle），由 parser.ts
+      // 從 JSONL progress records 產生；與 agent_status 是不同維度
+      if (!isStatusChangePayload(payload)) {
+        console.warn("[App] invalid statusChange payload", payload);
+        break;
+      }
+      updateAgent(payload.sessionId, { claudeStatus: payload.status });
+      updateAgentActivity(payload.sessionId);
+      break;
+    }
+
+    case "sidecarFatal": {
+      // Sidecar uncaughtException / unhandledRejection — 立即持久化便於後續回報
+      const p = payload as {
+        kind?: string;
+        message?: string;
+        stack?: string | null;
+      };
+      const message = p.message ?? "sidecar fatal error";
+      useSystemStore.getState().setNotice({
+        level: "error",
+        message,
+        fatal: true,
+      });
+      useLogStore.getState().addLog({
+        timestamp: Date.now(),
+        level: "error",
+        source: "sidecar",
+        message: `[${p.kind ?? "fatal"}] ${message}`,
+      });
+      void reportCrash(`sidecar-${p.kind ?? "fatal"}`, message, p);
+      break;
+    }
+
+    case "subtaskStart":
+    case "subtaskClear":
+    case "subtaskDone": {
+      // 子代理工具的 UI 呈現目前與主工具合併（toolStart/toolDone 已涵蓋）；
+      // 這些事件保留做 log，未來擴充「展開子代理樹」時會接更細的 state
+      if (!isSessionPayload(payload)) break;
+      updateAgentActivity(payload.sessionId);
+      break;
+    }
+
     case "connectionStatus": {
       if (!isConnectionStatusPayload(payload)) {
         console.warn("[App] invalid connectionStatus payload", payload);
@@ -299,6 +345,23 @@ function App() {
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;
+
+    // 啟動時（或 WebView reload 後）主動向 Rust 查詢當前 sidecar 狀態；
+    // 否則使用者按 Cmd+R 重整後會看到「未連線」但實際 sidecar 仍處於連線中。
+    // sidecar 已連線的話主動把 connectionStore 設回 connected，後續 agent
+    // 列表會透過事件流重建（agent tracker 的 replay 機制 + scanner 重新掃描）。
+    void getStatus()
+      .then((status) => {
+        if (status.connected) {
+          useConnectionStore.getState().setStatus("connected");
+          if (typeof status.agentCount === "number") {
+            useConnectionStore.getState().setAgentCount(status.agentCount);
+          }
+        }
+      })
+      .catch(() => {
+        /* sidecar 未啟動或尚未 ready — 保留 disconnected 狀態 */
+      });
 
     setupEventListeners({
       onSidecar: (evt) => {

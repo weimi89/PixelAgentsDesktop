@@ -142,7 +142,10 @@ export class Bridge {
 			},
 			onReconnect: () => {
 				this._connected = true;
-				console.log('[Bridge] Reconnected — re-scanning...');
+				console.log('[Bridge] Reconnected — forcing immediate re-scan');
+				// 重連後立即掃描一次，加速 session 重新註冊到伺服器；
+				// 不等下一個 scan tick（可能長達數秒）
+				this.scanner?.forceScan();
 				this._onEvent({
 					event: 'connectionStatus',
 					data: { connected: true, status: 'connected' },
@@ -158,12 +161,63 @@ export class Bridge {
 			return this.tracker?.getTrackedSessions().size ?? 0;
 		});
 
+		// 接入伺服器主動推送的終端控制訊息 — 讓遠端使用者可透過 server 操作
+		// 這台機器的 agent 終端（例如從手機 web UI 看/打字）
+		this.connection.setTerminalHandler({
+			onAttach: (sessionId, cols, rows) => this.terminalRelay.attach(sessionId, cols, rows),
+			onInput: (sessionId, data) => this.terminalRelay.input(sessionId, data),
+			onResize: (sessionId, cols, rows) => this.terminalRelay.resize(sessionId, cols, rows),
+			onDetach: (sessionId) => this.terminalRelay.detach(sessionId),
+		});
+
+		// 接入 resume session — 伺服器可在重新連線時要求恢復某個 session 追蹤
+		this.connection.setResumeHandler({
+			onResumeSession: (sessionId, projectDir) => {
+				this.resumeSession(sessionId, projectDir);
+			},
+		});
+
 		// Create Scanner
 		this.scanner = new Scanner(this.tracker);
 
 		// Start connection and scanning
 		this.connection.connect();
 		this.scanner.start();
+	}
+
+	/**
+	 * 處理伺服器推送的 resumeSession 請求：嘗試重新追蹤指定 sessionId。
+	 *
+	 * 實作策略：在 `~/.claude/projects/<projectDir>/<sessionId>.jsonl` 尋找
+	 * 對應檔案；若存在，委派 scanner.forceScan 讓 tracker 重新接管；成功
+	 * 與否都回報 `sessionResumed` 事件給伺服器。
+	 */
+	private resumeSession(sessionId: string, projectDir: string): void {
+		if (!this.tracker || !this.scanner || !this.connection) return;
+
+		// 若 tracker 已經追蹤此 session 則視為成功
+		if (this.tracker.getTrackedSessions().has(sessionId)) {
+			this.connection.sendEvent({
+				type: 'sessionResumed',
+				sessionId,
+				success: true,
+			});
+			return;
+		}
+
+		// 否則觸發一次 immediate scan，scanner 會自動撿起活躍 session
+		this.scanner.forceScan();
+		// forceScan 是 fire-and-forget，無法同步知道是否成功；這裡給一個小
+		// 延遲讓 scanner 跑完再查詢結果
+		setTimeout(() => {
+			const ok = this.tracker?.getTrackedSessions().has(sessionId) ?? false;
+			this.connection?.sendEvent({
+				type: 'sessionResumed',
+				sessionId,
+				success: ok,
+				...(ok ? {} : { error: `session not found in project ${projectDir}` }),
+			});
+		}, 1500);
 	}
 
 	/**
@@ -375,6 +429,16 @@ export class Bridge {
 						sessionId: event.sessionId,
 						parentToolId: event.parentToolId,
 						toolId: event.toolId,
+					},
+				});
+				break;
+
+			case 'subtaskClear':
+				this._onEvent({
+					event: 'subtaskClear',
+					data: {
+						sessionId: event.sessionId,
+						parentToolId: event.parentToolId,
 					},
 				});
 				break;

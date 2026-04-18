@@ -157,7 +157,14 @@ function makeStyles(c: ThemeColors) {
   } as const;
 }
 
-function AgentCardInner({ sessionId }: { sessionId: string }) {
+interface AgentCardProps {
+  sessionId: string;
+  /** 點擊卡片時的 callback（通常用來開啟 [[AgentDetailsDrawer]]）。
+   *  可省略；無 handler 時卡片不顯示 pointer cursor。 */
+  onSelect?: (sessionId: string) => void;
+}
+
+function AgentCardInner({ sessionId, onSelect }: AgentCardProps) {
   // 以 sessionId 訂閱單一 agent — 只有該 agent 變更時本 card 才重渲染
   const agent = useAgentStore((s) => s.agents.get(sessionId));
   const [hovered, setHovered] = useState(false);
@@ -170,11 +177,27 @@ function AgentCardInner({ sessionId }: { sessionId: string }) {
 
   if (!agent) return null;
 
+  const clickable = !!onSelect;
+
   return (
     <div
-      style={styles.card(hovered)}
+      style={{
+        ...styles.card(hovered),
+        cursor: clickable ? "pointer" : "default",
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={() => onSelect?.(sessionId)}
+      onKeyDown={(e) => {
+        if (!clickable) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect?.(sessionId);
+        }
+      }}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-label={clickable ? `${agent.projectName} — ${t("agents.detailsTitle")}` : undefined}
     >
       <div style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>

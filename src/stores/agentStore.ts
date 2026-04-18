@@ -17,8 +17,17 @@
 
 import { create } from "zustand";
 
-/** Agent 忙碌狀態 — 有工具正在執行為 `active`，否則 `idle`。 */
+/** Agent 忙碌狀態 — 有工具正在執行為 `active`，否則 `idle`。
+ *  由應用層從 tool 數量推導，與下方 ClaudeStatus 為兩個維度。 */
 export type AgentStatus = "active" | "idle";
+
+/** Claude Code 原生的 agent 狀態 — 由 JSONL parser 發出的 `statusChange`
+ *  事件填入。可與 [[AgentStatus]] 共存；兩者分別表達不同語意：
+ *  - `waiting`：等待使用者輸入
+ *  - `permission`：請求權限（敏感工具呼叫）
+ *  - `idle`：閒置
+ *  - `undefined`：尚未收到過 statusChange 事件 */
+export type ClaudeStatus = "waiting" | "permission" | "idle" | undefined;
 
 export interface ToolInfo {
   toolId: string;
@@ -32,6 +41,10 @@ export interface AgentInfo {
   projectName: string;
   tools: ToolInfo[];
   status: AgentStatus;
+  /** Claude Code 原生狀態（waiting/permission/idle）；若 sidecar 尚未發出
+   *  statusChange 事件則為 `undefined`。用於 UI 顯示「等待輸入」「請求權限」
+   *  等更細緻的指示燈。 */
+  claudeStatus?: ClaudeStatus;
   lastActivity: number;
 }
 

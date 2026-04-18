@@ -83,7 +83,16 @@ export function parseJsonlLine(sessionId: string, line: string): AgentNodeEvent[
 			const dataType = data.type as string | undefined;
 			if (dataType === 'waiting_for_task') {
 				events.push({ type: 'agentEmote', sessionId, emoteType: 'eye' });
+				events.push({ type: 'statusChange', sessionId, status: 'waiting' });
 				return events;
+			}
+			if (dataType === 'subtask_cleared') {
+				// Claude Code 於子代理任務結束時發出；告訴 UI 可清除該分支展開
+				events.push({ type: 'subtaskClear', sessionId, parentToolId });
+				return events;
+			}
+			if (dataType === 'permission_request') {
+				events.push({ type: 'statusChange', sessionId, status: 'permission' });
 			}
 
 			// 子代理工具
