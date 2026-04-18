@@ -151,6 +151,10 @@ pub async fn save_config(server_url: String, token: String) -> Result<Value, Str
 }
 
 /// Internal helper to write config file.
+///
+/// 在 Unix 上將檔案權限收斂至 0600（僅 owner 可讀寫），避免其他帳號或
+/// 誤用 group 讀取明文 token。真正的解法是遷移至 OS keychain，但那需要
+/// 較大變更；這裡先以最小改動提高基本防線。
 fn save_config_to_file(server_url: &str, token: &str) -> Result<(), String> {
     let path = config_path()?;
     if let Some(parent) = path.parent() {
@@ -165,6 +169,16 @@ fn save_config_to_file(server_url: &str, token: &str) -> Result<(), String> {
         .map_err(|e| format!("Failed to serialize config: {e}"))?;
     fs::write(&path, content)
         .map_err(|e| format!("Failed to write config: {e}"))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perm = fs::Permissions::from_mode(0o600);
+        if let Err(e) = fs::set_permissions(&path, perm) {
+            log::warn!("Failed to tighten config file permissions: {e}");
+        }
+    }
+
     Ok(())
 }
 
