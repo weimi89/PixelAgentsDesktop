@@ -93,6 +93,13 @@ export class Scanner {
 		const now = Date.now();
 		const trackedSessions = this.tracker.getTrackedSessions();
 
+		// 清理超過 staleTimeoutMs 未更新的 lastActivity — 避免長跑累積
+		for (const [sid, t] of this.lastActivity) {
+			if (now - t > this.options.staleTimeoutMs) {
+				this.lastActivity.delete(sid);
+			}
+		}
+
 		for (const dir of projectDirs) {
 			let files: fs.Dirent[];
 			try {
@@ -134,9 +141,19 @@ export class Scanner {
 	}
 }
 
-/** 從專案目錄名稱提取可讀的專案名稱 */
+/** 從專案目錄名稱提取可讀的專案名稱
+ *
+ * Claude Code 目錄命名：絕對路徑中的 '/' 被換成 '-'，
+ * 例 /Users/foo/my-awesome-project → -Users-foo-my-awesome-project。
+ * 去掉 home dir prefix 後，剩餘整段就是專案名稱（保留 dash）。
+ * 若無法辨識 home 前綴，退回取最後一段的舊行為。 */
 function extractProjectName(projectDir: string): string {
 	const dirName = path.basename(projectDir);
+	const homeEncoded = os.homedir().replace(/\//g, '-');
+	if (homeEncoded && dirName.startsWith(homeEncoded)) {
+		const rest = dirName.slice(homeEncoded.length).replace(/^-+/, '');
+		if (rest) return rest;
+	}
 	const parts = dirName.split(/-+/).filter(Boolean);
 	return parts[parts.length - 1] || dirName;
 }

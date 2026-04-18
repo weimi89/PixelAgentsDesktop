@@ -220,9 +220,11 @@ function handleSidecarEvent(event: SidecarEvent) {
     }
   }
 
-  // Update agent count
+  // 只在數量實際變化時更新 — 避免每個事件都觸發 connectionStore 的 subscriber 重渲染
   const agentCount = useAgentStore.getState().agents.size;
-  setAgentCount(agentCount);
+  if (agentCount !== useConnectionStore.getState().agentCount) {
+    setAgentCount(agentCount);
+  }
 }
 
 function App() {

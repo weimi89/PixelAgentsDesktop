@@ -68,6 +68,16 @@ export class Bridge {
 		// Clean up any existing connection first
 		this.disconnect();
 
+		try {
+			await this.connectInternal(serverUrl, token);
+		} catch (err) {
+			// 任何一層初始化失敗都要回復，避免 tracker/connection/scanner 資源洩漏
+			this.disconnect();
+			throw err;
+		}
+	}
+
+	private async connectInternal(serverUrl: string, token: string): Promise<void> {
 		// Create AgentTracker — receives parsed JSONL events and forwards them
 		this.tracker = new AgentTracker((event: AgentNodeEvent) => {
 			// Forward to server

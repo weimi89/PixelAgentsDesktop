@@ -336,13 +336,22 @@ export function SettingsView() {
       <div style={styles.section}>
         <h3 style={styles.sectionTitle}>應用程式</h3>
         <div
-          style={styles.checkboxRow}
-          onClick={() => handleAutoStartToggle(!(autoStartEnabled ?? autoStart))}
+          style={{
+            ...styles.checkboxRow,
+            cursor: autoStartEnabled === null ? "wait" : "pointer",
+            opacity: autoStartEnabled === null ? 0.6 : 1,
+          }}
+          onClick={() => {
+            // 初始讀取尚未完成時禁止觸發，避免以 store 的預設值切換實際系統狀態
+            if (autoStartEnabled === null) return;
+            void handleAutoStartToggle(!autoStartEnabled);
+          }}
         >
           <input
             type="checkbox"
             style={styles.checkbox}
-            checked={autoStartEnabled ?? autoStart}
+            checked={autoStartEnabled ?? false}
+            disabled={autoStartEnabled === null}
             onChange={() => {}}
           />
           <span style={styles.label}>登入時自動啟動</span>

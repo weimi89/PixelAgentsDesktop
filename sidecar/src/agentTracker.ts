@@ -23,6 +23,10 @@ interface TrackedAgent {
 const FILE_WATCHER_POLL_INTERVAL_MS = 2000;
 /** 單次讀取最大字節，避免短暫暴增的 JSONL 一次分配超大 Buffer 阻塞 event loop。 */
 const MAX_READ_CHUNK_BYTES = 4 * 1024 * 1024;
+/** 首次追蹤時回放的最大歷史字節數 — 覆蓋 Scanner 判定活躍前的 30 秒內容，
+ *  確保前端能看到當前模型、進行中工具等狀態；過大的歷史對話會被截斷。
+ *  首行可能被從檔案中間切斷，但 parser 對壞 JSON 會靜默 skip。 */
+const INITIAL_REPLAY_MAX_BYTES = 256 * 1024;
 
 /** 代理追蹤器 — 管理每個 JSONL 檔案的增量讀取與事件產生 */
 export class AgentTracker {
@@ -37,10 +41,14 @@ export class AgentTracker {
 	startTracking(sessionId: string, jsonlFile: string, projectDir: string, projectName: string): void {
 		if (this.tracked.has(sessionId)) return;
 
+		// 首次追蹤：回放最近 INITIAL_REPLAY_MAX_BYTES 的內容以供 UI 重建狀態
 		let fileOffset = 0;
 		try {
 			if (fs.existsSync(jsonlFile)) {
-				fileOffset = fs.statSync(jsonlFile).size;
+				const size = fs.statSync(jsonlFile).size;
+				fileOffset = size > INITIAL_REPLAY_MAX_BYTES
+					? size - INITIAL_REPLAY_MAX_BYTES
+					: 0;
 			}
 		} catch { /* 忽略 */ }
 

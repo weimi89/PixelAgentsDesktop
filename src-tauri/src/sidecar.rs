@@ -31,6 +31,11 @@ const REQUEST_TIMEOUT_SECS: u64 = 10;
 /// Shutdown IPC timeout (shorter than REQUEST_TIMEOUT_SECS).
 const SHUTDOWN_TIMEOUT_SECS: u64 = 3;
 
+/// IPC protocol version expected from the sidecar's `ready` event.
+/// Bump this if `ipcProtocol.ts` adds breaking changes (not when adding new
+/// optional fields).
+const EXPECTED_SIDECAR_VERSION: &str = "0.1.0";
+
 /// Result of spawning a child process — the parts we need to wire up.
 struct SpawnedChild {
     child: Child,
@@ -191,6 +196,31 @@ impl SidecarManager {
                     }
                     Ok(IpcMessage::Event(evt)) => {
                         log::debug!("Sidecar event: {} {:?}", evt.event, evt.data);
+                        if evt.event == "ready" {
+                            if let Some(version) =
+                                evt.data.get("version").and_then(|v| v.as_str())
+                            {
+                                if version != EXPECTED_SIDECAR_VERSION {
+                                    log::warn!(
+                                        "Sidecar protocol version mismatch: expected {}, got {}",
+                                        EXPECTED_SIDECAR_VERSION,
+                                        version
+                                    );
+                                    let _ = app.emit(
+                                        "sidecar-crash",
+                                        serde_json::json!({
+                                            "message": format!(
+                                                "Sidecar protocol version mismatch: expected {}, got {}. Some features may not work.",
+                                                EXPECTED_SIDECAR_VERSION, version
+                                            ),
+                                            "warning": true
+                                        }),
+                                    );
+                                } else {
+                                    log::info!("Sidecar protocol version: {}", version);
+                                }
+                            }
+                        }
                         handle_tray_event(&app, &evt.event, &evt.data, &agent_count);
                         let _ = app.emit("sidecar-event", &evt);
                     }

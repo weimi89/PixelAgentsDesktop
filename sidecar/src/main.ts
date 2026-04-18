@@ -9,11 +9,12 @@ import type { IpcRequest, IpcResponse, IpcEvent } from './ipcProtocol.js';
 import { Bridge } from './bridge.js';
 
 const VERSION = '0.1.0';
-const bridge = new Bridge((evt) => send(evt));
 
 // ── Redirect console to stderr / IPC log events ──
+//
+// 必須在建立 Bridge 之前重寫 console，否則 Bridge ctor 或其依賴的模組
+// 若印 log，會直接寫入 stdout 為 plain text，破壞 NDJSON 協定。
 
-const origConsoleLog = console.log;
 const origConsoleError = console.error;
 
 console.log = (...args: unknown[]) => {
@@ -33,6 +34,8 @@ console.warn = (...args: unknown[]) => {
   sendEvent('log', { level: 'warn', message });
   origConsoleError('[sidecar:warn]', ...args);
 };
+
+const bridge = new Bridge((evt) => send(evt));
 
 // ── IPC send helpers ──
 
