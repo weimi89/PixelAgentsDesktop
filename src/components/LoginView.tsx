@@ -112,6 +112,22 @@ const styles = {
     display: "inline-block",
     marginRight: "8px",
   },
+  secretRow: {
+    position: "relative" as const,
+  },
+  toggleButton: {
+    position: "absolute" as const,
+    right: "6px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    background: "transparent",
+    border: "none",
+    color: "#a6adc8",
+    fontSize: "11px",
+    fontFamily: "monospace",
+    cursor: "pointer",
+    padding: "2px 6px",
+  },
 } as const;
 
 export function LoginView() {
@@ -127,6 +143,8 @@ export function LoginView() {
   const [authMode, setAuthMode] = useState<AuthMode>("apikey");
   const [loading, setLoading] = useState(false);
   const [error, setErrorLocal] = useState<string | null>(null);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const canConnect =
     serverUrl.trim() !== "" &&
@@ -214,15 +232,25 @@ export function LoginView() {
         {authMode === "apikey" ? (
           <div style={styles.fieldGroup}>
             <label style={styles.label}>API 金鑰</label>
-            <input
-              style={styles.input}
-              type="password"
-              placeholder=""
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={loading}
-            />
+            <div style={styles.secretRow}>
+              <input
+                style={{ ...styles.input, paddingRight: "56px" }}
+                type={showApiKey ? "text" : "password"}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={loading}
+              />
+              <button
+                type="button"
+                style={styles.toggleButton}
+                onClick={() => setShowApiKey((v) => !v)}
+                tabIndex={-1}
+                aria-label={showApiKey ? "隱藏" : "顯示"}
+              >
+                {showApiKey ? "隱藏" : "顯示"}
+              </button>
+            </div>
           </div>
         ) : (
           <>
@@ -231,7 +259,6 @@ export function LoginView() {
               <input
                 style={styles.input}
                 type="text"
-                placeholder=""
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -240,15 +267,25 @@ export function LoginView() {
             </div>
             <div style={styles.fieldGroup}>
               <label style={styles.label}>密碼</label>
-              <input
-                style={styles.input}
-                type="password"
-                placeholder=""
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={loading}
-              />
+              <div style={styles.secretRow}>
+                <input
+                  style={{ ...styles.input, paddingRight: "56px" }}
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  style={styles.toggleButton}
+                  onClick={() => setShowPassword((v) => !v)}
+                  tabIndex={-1}
+                  aria-label={showPassword ? "隱藏" : "顯示"}
+                >
+                  {showPassword ? "隱藏" : "顯示"}
+                </button>
+              </div>
             </div>
           </>
         )}

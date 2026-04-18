@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { useConnectionStore } from "../stores/connectionStore";
+import { useSystemStore } from "../stores/systemStore";
 import { disconnect } from "../tauri-api";
 
 const styles = {
@@ -38,6 +40,15 @@ const styles = {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap" as const,
     maxWidth: "200px",
+    cursor: "pointer",
+    background: "transparent",
+    border: "none",
+    padding: 0,
+    fontFamily: "monospace",
+  },
+  version: {
+    color: "#585b70",
+    fontSize: "11px",
   },
   spacer: {
     flex: 1,
@@ -71,6 +82,8 @@ const STATUS_COLORS: Record<string, string> = {
 export function StatusBar() {
   const { status, latency, agentCount, error, serverUrl, reset } =
     useConnectionStore();
+  const sidecarVersion = useSystemStore((s) => s.sidecarVersion);
+  const [copied, setCopied] = useState(false);
 
   const indicatorColor = STATUS_COLORS[status] ?? "#6c7086";
 
@@ -83,6 +96,17 @@ export function StatusBar() {
     reset();
   };
 
+  const handleCopy = async () => {
+    if (!serverUrl) return;
+    try {
+      await navigator.clipboard.writeText(serverUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // Clipboard API 可能被拒；fail silently
+    }
+  };
+
   return (
     <div style={styles.bar}>
       <div style={styles.statusGroup}>
@@ -93,7 +117,13 @@ export function StatusBar() {
       </div>
 
       {status === "connected" && serverUrl && (
-        <span style={styles.serverUrl}>{serverUrl}</span>
+        <button
+          style={styles.serverUrl}
+          onClick={handleCopy}
+          title={copied ? "已複製！" : `點擊複製：${serverUrl}`}
+        >
+          {copied ? "已複製" : serverUrl}
+        </button>
       )}
 
       <span>
@@ -111,6 +141,12 @@ export function StatusBar() {
       {error && <span style={styles.error}>{error}</span>}
 
       <div style={styles.spacer} />
+
+      {sidecarVersion && (
+        <span style={styles.version} title="Sidecar 協定版本">
+          sidecar v{sidecarVersion}
+        </span>
+      )}
 
       {status === "connected" && (
         <button style={styles.disconnectButton} onClick={handleDisconnect}>

@@ -191,16 +191,36 @@ export async function onSidecarEvent(
   });
 }
 
+/** Rust 發出的 sidecar 崩潰 / 重啟通知事件 */
+export interface SidecarCrashEvent {
+  message: string;
+  recovered?: boolean;
+  fatal?: boolean;
+  warning?: boolean;
+}
+
+export async function onSidecarCrash(
+  callback: (event: SidecarCrashEvent) => void,
+): Promise<UnlistenFn> {
+  return listen<SidecarCrashEvent>("sidecar-crash", (event) => {
+    callback(event.payload);
+  });
+}
+
 /**
  * Set up event listeners. Returns a cleanup function.
  */
 export async function setupEventListeners(handlers: {
   onSidecar?: (event: SidecarEvent) => void;
+  onSidecarCrash?: (event: SidecarCrashEvent) => void;
 }): Promise<() => void> {
   const unlisteners: UnlistenFn[] = [];
 
   if (handlers.onSidecar) {
     unlisteners.push(await onSidecarEvent(handlers.onSidecar));
+  }
+  if (handlers.onSidecarCrash) {
+    unlisteners.push(await onSidecarCrash(handlers.onSidecarCrash));
   }
 
   return () => {

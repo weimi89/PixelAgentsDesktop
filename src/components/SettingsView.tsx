@@ -378,15 +378,9 @@ export function SettingsView() {
         </div>
         <div style={styles.row}>
           <span style={styles.label}>更新</span>
-          <button
-            style={styles.smallButton}
-            onClick={() => {
-              // Placeholder for future auto-update integration
-              alert("自動更新即將推出！");
-            }}
-          >
-            檢查更新
-          </button>
+          <span style={{ ...styles.value, color: "#6c7086", fontStyle: "italic" }}>
+            手動下載 — 尚未支援自動更新
+          </span>
         </div>
         <div style={styles.rowLast}>
           <span style={styles.label}>原始碼</span>

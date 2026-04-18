@@ -5,6 +5,8 @@ import { useLogStore } from "./stores/logStore";
 import { setupEventListeners, type SidecarEvent } from "./tauri-api";
 import { LoginView } from "./components/LoginView";
 import { MainView } from "./components/MainView";
+import { NoticeBanner } from "./components/NoticeBanner";
+import { useSystemStore } from "./stores/systemStore";
 import {
   isAgentStartedPayload,
   isSessionPayload,
@@ -242,6 +244,18 @@ function handleSidecarEvent(event: SidecarEvent) {
   }
 }
 
+function handleReadyEvent(event: SidecarEvent): void {
+  const kind = event.kind ?? event.event;
+  if (kind !== "ready") return;
+  const data = event.payload ?? event.data;
+  if (typeof data === "object" && data !== null && "version" in data) {
+    const v = (data as { version?: unknown }).version;
+    if (typeof v === "string") {
+      useSystemStore.getState().setSidecarVersion(v);
+    }
+  }
+}
+
 function App() {
   const status = useConnectionStore((s) => s.status);
 
@@ -249,7 +263,24 @@ function App() {
     let cleanup: (() => void) | undefined;
 
     setupEventListeners({
-      onSidecar: handleSidecarEvent,
+      onSidecar: (evt) => {
+        handleReadyEvent(evt);
+        handleSidecarEvent(evt);
+      },
+      onSidecarCrash: (evt) => {
+        const level = evt.fatal ? "error" : evt.warning ? "warn" : "info";
+        useSystemStore.getState().setNotice({
+          level,
+          message: evt.message,
+          fatal: !!evt.fatal,
+        });
+        useLogStore.getState().addLog({
+          timestamp: Date.now(),
+          level: evt.fatal ? "error" : "warn",
+          source: "sidecar",
+          message: evt.message,
+        });
+      },
     }).then((fn) => {
       cleanup = fn;
     });
@@ -263,6 +294,7 @@ function App() {
 
   return (
     <div style={styles.container}>
+      <NoticeBanner />
       {isConnected ? <MainView /> : <LoginView />}
     </div>
   );
