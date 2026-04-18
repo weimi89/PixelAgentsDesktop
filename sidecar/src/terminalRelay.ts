@@ -11,6 +11,10 @@ interface ManagedTerminal {
 	sessionId: string;
 	cols: number;
 	rows: number;
+	/** epoch 用於區分同一 sessionId 的不同 terminal 實例（避免 attach→detach→attach race） */
+	epoch: number;
+	/** 主動 detach 中，exit 事件不應通知前端 */
+	intentionalClose: boolean;
 }
 
 export interface TerminalRelayCallbacks {
@@ -32,6 +36,7 @@ export class TerminalRelay {
 	private callbacks: TerminalRelayCallbacks;
 	/** Get the project directory for a sessionId (provided externally) */
 	private getProjectDir: (sessionId: string) => string | undefined;
+	private epochCounter = 0;
 
 	constructor(callbacks: TerminalRelayCallbacks, getProjectDir: (sessionId: string) => string | undefined) {
 		this.callbacks = callbacks;
@@ -53,36 +58,38 @@ export class TerminalRelay {
 		const projectDir = this.getProjectDir(sessionId);
 		const cwd = projectDir || os.homedir();
 
-		// Check if tmux session exists first
-		const checkTmux = spawn('tmux', ['has-session', '-t', tmuxSessionName], {
-			stdio: ['ignore', 'ignore', 'ignore'],
-		});
-
-		checkTmux.on('close', (code) => {
-			if (code === 0) {
-				// tmux session exists — attach to it
+		// Check if tmux session exists first — guard against duplicate callback
+		let settled = false;
+		const onDone = (hasTmux: boolean) => {
+			if (settled) return;
+			settled = true;
+			if (hasTmux) {
 				this.spawnTerminal(sessionId, 'tmux', ['attach-session', '-t', tmuxSessionName], cwd, effectiveCols, effectiveRows);
 			} else {
-				// No tmux session — start a plain shell
 				const shell = process.env.SHELL || '/bin/bash';
 				this.spawnTerminal(sessionId, shell, [], cwd, effectiveCols, effectiveRows);
 			}
-		});
+		};
 
-		checkTmux.on('error', () => {
-			// tmux not installed — start a plain shell
-			const shell = process.env.SHELL || '/bin/bash';
-			this.spawnTerminal(sessionId, shell, [], cwd, effectiveCols, effectiveRows);
+		const checkTmux = spawn('tmux', ['has-session', '-t', tmuxSessionName], {
+			stdio: ['ignore', 'ignore', 'ignore'],
 		});
+		checkTmux.on('close', (code) => onDone(code === 0));
+		checkTmux.on('error', () => onDone(false));
 	}
 
 	/** Terminate and clean up the terminal for the specified agent */
 	detach(sessionId: string): void {
 		const terminal = this.terminals.get(sessionId);
 		if (!terminal) return;
+		// 標記為主動 detach — close 回呼會據此跳過 onExit 通知
+		terminal.intentionalClose = true;
 		this.terminals.delete(sessionId);
 
 		try {
+			if (terminal.process.stdin && !terminal.process.stdin.destroyed) {
+				terminal.process.stdin.end();
+			}
 			terminal.process.kill('SIGTERM');
 		} catch {
 			// process may already be dead
@@ -93,7 +100,13 @@ export class TerminalRelay {
 	input(sessionId: string, data: string): void {
 		const terminal = this.terminals.get(sessionId);
 		if (!terminal) return;
-		terminal.process.stdin?.write(data);
+		const stdin = terminal.process.stdin;
+		if (!stdin || stdin.destroyed || !stdin.writable) return;
+		try {
+			stdin.write(data);
+		} catch {
+			// 子程序可能已 exit，EPIPE 等錯誤直接忽略
+		}
 	}
 
 	/** Resize a terminal (via tmux resize-window if applicable) */
@@ -146,11 +159,14 @@ export class TerminalRelay {
 				stdio: ['pipe', 'pipe', 'pipe'],
 			});
 
+			const epoch = ++this.epochCounter;
 			const terminal: ManagedTerminal = {
 				process: child,
 				sessionId,
 				cols,
 				rows,
+				epoch,
+				intentionalClose: false,
 			};
 			this.terminals.set(sessionId, terminal);
 
@@ -164,13 +180,23 @@ export class TerminalRelay {
 			});
 
 			child.on('close', (code) => {
-				this.terminals.delete(sessionId);
-				this.callbacks.onExit(sessionId, code ?? 1);
+				// 只在 map 中仍然指向本 epoch 時才清除；避免 attach→detach→attach 時誤砍新 terminal
+				const current = this.terminals.get(sessionId);
+				const isCurrent = current?.epoch === epoch;
+				if (isCurrent) this.terminals.delete(sessionId);
+				// 主動 detach 不通知前端 — 前端會回到 placeholder UI
+				if (!terminal.intentionalClose && isCurrent) {
+					this.callbacks.onExit(sessionId, code ?? 1);
+				}
 			});
 
 			child.on('error', (err) => {
-				this.terminals.delete(sessionId);
-				this.callbacks.onError(sessionId, err.message);
+				const current = this.terminals.get(sessionId);
+				const isCurrent = current?.epoch === epoch;
+				if (isCurrent) this.terminals.delete(sessionId);
+				if (!terminal.intentionalClose && isCurrent) {
+					this.callbacks.onError(sessionId, err.message);
+				}
 			});
 
 			// Notify ready

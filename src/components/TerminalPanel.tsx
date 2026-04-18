@@ -91,11 +91,12 @@ export function TerminalPanel() {
   const containerRef = useRef<HTMLDivElement>(null);
   const attachedRef = useRef<string | null>(null);
   const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { getTerminal, write, clear, getDimensions, fit } = useTerminal();
+  const { getTerminal, write, clear, getDimensions, fit, termEpoch } = useTerminal();
 
   const agentList = Array.from(agents.values());
 
-  // Open terminal into DOM container when both are available
+  // Open terminal into DOM container when both are available.
+  // Depend on termEpoch so this re-runs after the xterm instance is created.
   useEffect(() => {
     const terminal = getTerminal();
     const container = containerRef.current;
@@ -106,7 +107,7 @@ export function TerminalPanel() {
 
     terminal.open(container);
     requestAnimationFrame(() => fit());
-  }, [getTerminal, fit, selectedSessionId]);
+  }, [getTerminal, fit, selectedSessionId, termEpoch]);
 
   // Forward user typing to sidecar
   useEffect(() => {
@@ -120,7 +121,7 @@ export function TerminalPanel() {
     });
 
     return () => disposable.dispose();
-  }, [getTerminal]);
+  }, [getTerminal, termEpoch]);
 
   // Listen for terminal events from sidecar
   useEffect(() => {
@@ -153,7 +154,7 @@ export function TerminalPanel() {
             setTermReady(false);
             setTermExited(true);
             setExitMessage(
-              `Terminal exited with code ${code ?? "unknown"}`,
+              `終端機已結束，代碼 ${code ?? "未知"}`,
             );
           }
         }
@@ -244,7 +245,7 @@ export function TerminalPanel() {
     return (
       <div style={styles.container}>
         <div style={styles.placeholder}>
-          No agents available. Connect to a server first.
+          無可用代理，請先連線至伺服器。
         </div>
       </div>
     );
@@ -253,13 +254,13 @@ export function TerminalPanel() {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <span style={styles.label}>Agent:</span>
+        <span style={styles.label}>代理:</span>
         <select
           style={styles.select}
           value={selectedSessionId ?? ""}
           onChange={(e) => setSelectedSessionId(e.target.value || null)}
         >
-          <option value="">-- Select agent --</option>
+          <option value="">-- 選擇代理 --</option>
           {agentList.map((agent) => (
             <option key={agent.sessionId} value={agent.sessionId}>
               {agent.projectName} ({agent.sessionId.slice(0, 8)})
@@ -268,7 +269,7 @@ export function TerminalPanel() {
         </select>
         <div
           style={styles.statusDot(termReady)}
-          title={termReady ? "Connected" : "Disconnected"}
+          title={termReady ? "已連線" : "未連線"}
         />
       </div>
 
@@ -280,7 +281,7 @@ export function TerminalPanel() {
         )
       ) : (
         <div style={styles.placeholder}>
-          Select an agent to open its terminal.
+          選擇一個代理以開啟終端機。
         </div>
       )}
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 
@@ -38,6 +38,9 @@ export interface UseTerminalReturn {
   getDimensions: () => { cols: number; rows: number } | null;
   /** Call fit on the FitAddon */
   fit: () => void;
+  /** Increments when the underlying Terminal instance is (re)created.
+   * Downstream effects should depend on this to re-run after mount / Strict Mode remount. */
+  termEpoch: number;
 }
 
 /**
@@ -48,8 +51,9 @@ export interface UseTerminalReturn {
 export function useTerminal(): UseTerminalReturn {
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const [termEpoch, setTermEpoch] = useState(0);
 
-  // Create terminal once
+  // Create terminal once (or per StrictMode remount)
   useEffect(() => {
     const fitAddon = new FitAddon();
     const terminal = new Terminal({
@@ -67,6 +71,9 @@ export function useTerminal(): UseTerminalReturn {
 
     termRef.current = terminal;
     fitRef.current = fitAddon;
+    // Bump epoch to notify consumers that termRef.current is now valid.
+    // Downstream effects that need the terminal should depend on termEpoch.
+    setTermEpoch((n) => n + 1);
 
     return () => {
       terminal.dispose();
@@ -100,5 +107,5 @@ export function useTerminal(): UseTerminalReturn {
     }
   }, []);
 
-  return { getTerminal, getFitAddon, write, clear, getDimensions, fit };
+  return { getTerminal, getFitAddon, write, clear, getDimensions, fit, termEpoch };
 }

@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
@@ -6,10 +8,10 @@ use std::time::Instant;
 use serde_json::Value;
 use tauri::AppHandle;
 use tauri::Emitter;
-use tauri::Manager;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, Command};
+use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{oneshot, Mutex, Notify};
+use tokio::task::JoinHandle;
 
 use crate::ipc::{decode_line, encode_request, IpcMessage, IpcRequest};
 use crate::tray;
@@ -24,17 +26,20 @@ const RESTART_WINDOW_SECS: u64 = 300;
 /// Base backoff delay in seconds (exponential: 1s, 3s, 9s).
 const BACKOFF_BASE_SECS: u64 = 1;
 const BACKOFF_MULTIPLIER: u64 = 3;
+/// Request timeout in seconds.
+const REQUEST_TIMEOUT_SECS: u64 = 10;
+/// Shutdown IPC timeout (shorter than REQUEST_TIMEOUT_SECS).
+const SHUTDOWN_TIMEOUT_SECS: u64 = 3;
 
 /// Result of spawning a child process — the parts we need to wire up.
 struct SpawnedChild {
     child: Child,
-    stdin: tokio::process::ChildStdin,
+    stdin: ChildStdin,
     stdout: tokio::process::ChildStdout,
     stderr: tokio::process::ChildStderr,
 }
 
-/// Spawn the node sidecar process. This is a plain function (no &mut self)
-/// so that its future is Send.
+/// Spawn the node sidecar process.
 fn spawn_child_process(node_path: &str, sidecar_path: &str) -> Result<SpawnedChild, String> {
     let mut child = Command::new(node_path)
         .arg(sidecar_path)
@@ -58,27 +63,39 @@ fn spawn_child_process(node_path: &str, sidecar_path: &str) -> Result<SpawnedChi
 }
 
 /// Manages the Node.js sidecar process lifecycle and IPC.
+///
+/// All fields are internally mutable (Arc<Mutex<>> / Arc<Atomic*>) so that
+/// `SidecarManager` can be shared via `Arc<Self>` with all methods taking `&self`.
+/// This avoids holding any outer lock while awaiting IPC responses, preventing
+/// the shutdown deadlock that occurred when a held `Mutex<SidecarManager>` was
+/// needed by the reader task's crash-restart path.
 pub struct SidecarManager {
-    child: Option<Child>,
-    stdin: Option<tokio::process::ChildStdin>,
+    child: Arc<Mutex<Option<Child>>>,
+    stdin: Arc<Mutex<Option<ChildStdin>>>,
     pending: PendingMap,
     next_id: Arc<AtomicU64>,
-    /// Flag to distinguish intentional shutdown from crash.
     shutting_down: Arc<AtomicBool>,
-    /// Notify handle to cancel the monitor task on shutdown.
     shutdown_notify: Arc<Notify>,
-    /// Crash tracking for auto-restart.
     restart_count: Arc<AtomicU64>,
     last_restart_time: Arc<Mutex<Option<Instant>>>,
-    /// Agent count tracked from sidecar events (for tray updates).
     agent_count: Arc<AtomicU64>,
+    /// Last successful connect params; used to re-connect after a crash restart.
+    last_connect_params: Arc<Mutex<Option<ConnectParams>>>,
+    /// Handle to the stability-monitor task (aborted on subsequent restarts).
+    stability_task: Arc<Mutex<Option<JoinHandle<()>>>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConnectParams {
+    pub server_url: String,
+    pub token: String,
 }
 
 impl SidecarManager {
     pub fn new() -> Self {
         Self {
-            child: None,
-            stdin: None,
+            child: Arc::new(Mutex::new(None)),
+            stdin: Arc::new(Mutex::new(None)),
             pending: Arc::new(Mutex::new(HashMap::new())),
             next_id: Arc::new(AtomicU64::new(1)),
             shutting_down: Arc::new(AtomicBool::new(false)),
@@ -86,12 +103,14 @@ impl SidecarManager {
             restart_count: Arc::new(AtomicU64::new(0)),
             last_restart_time: Arc::new(Mutex::new(None)),
             agent_count: Arc::new(AtomicU64::new(0)),
+            last_connect_params: Arc::new(Mutex::new(None)),
+            stability_task: Arc::new(Mutex::new(None)),
         }
     }
 
     /// Spawn the sidecar process and start reading stdout in background.
     pub async fn spawn(
-        &mut self,
+        self: Arc<Self>,
         node_path: &str,
         sidecar_path: &str,
         app_handle: AppHandle,
@@ -100,33 +119,52 @@ impl SidecarManager {
         self.shutting_down.store(false, Ordering::SeqCst);
 
         let spawned = spawn_child_process(node_path, sidecar_path)?;
-        self.install_child(spawned, node_path, sidecar_path, app_handle);
+        self.install_child(
+            spawned,
+            node_path.to_string(),
+            sidecar_path.to_string(),
+            app_handle,
+        )
+        .await;
 
         log::info!("Sidecar spawned successfully");
         Ok(())
     }
 
     /// Wire up a newly-spawned child: store handles, start reader tasks.
+    ///
+    /// Returns a `BoxFuture` (not `async fn`) so the recursive call from the
+    /// reader task's restart path has a concrete, `Send` type — avoiding
+    /// infinite auto-trait inference on `impl Future`.
     fn install_child(
-        &mut self,
+        self: Arc<Self>,
         spawned: SpawnedChild,
-        node_path: &str,
-        sidecar_path: &str,
+        node_path: String,
+        sidecar_path: String,
+        app_handle: AppHandle,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> {
+        Box::pin(self.install_child_impl(spawned, node_path, sidecar_path, app_handle))
+    }
+
+    async fn install_child_impl(
+        self: Arc<Self>,
+        spawned: SpawnedChild,
+        node_path: String,
+        sidecar_path: String,
         app_handle: AppHandle,
     ) {
-        self.child = Some(spawned.child);
-        self.stdin = Some(spawned.stdin);
+        *self.child.lock().await = Some(spawned.child);
+        *self.stdin.lock().await = Some(spawned.stdin);
 
-        // Clone shared state for the reader task
+        // Shared state for reader task
         let pending = self.pending.clone();
         let app = app_handle.clone();
         let shutting_down = self.shutting_down.clone();
         let shutdown_notify = self.shutdown_notify.clone();
         let agent_count = self.agent_count.clone();
-        let restart_count = self.restart_count.clone();
-        let last_restart_time = self.last_restart_time.clone();
-        let restart_node_path = node_path.to_string();
-        let restart_sidecar_path = sidecar_path.to_string();
+        let manager = self.clone();
+        let restart_node_path = node_path;
+        let restart_sidecar_path = sidecar_path;
 
         let stdout = spawned.stdout;
         let stderr = spawned.stderr;
@@ -164,6 +202,19 @@ impl SidecarManager {
 
             log::info!("Sidecar stdout reader ended");
 
+            // --- Drain pending to avoid 10s timeouts on the frontend ---
+            {
+                let mut map = pending.lock().await;
+                let drained: Vec<_> = map.drain().collect();
+                drop(map);
+                for (_, tx) in drained {
+                    let _ = tx.send(Err("Sidecar exited".to_string()));
+                }
+            }
+
+            // Close stdin since the process is gone
+            *manager.stdin.lock().await = None;
+
             // --- Crash detection & auto-restart ---
             if shutting_down.load(Ordering::SeqCst) {
                 log::info!("Sidecar shutdown was intentional, not restarting");
@@ -180,8 +231,8 @@ impl SidecarManager {
 
             // Check restart limits & apply backoff
             let can_restart = check_restart_limits(
-                &restart_count,
-                &last_restart_time,
+                &manager.restart_count,
+                &manager.last_restart_time,
                 &shutting_down,
                 &shutdown_notify,
                 &app,
@@ -192,18 +243,18 @@ impl SidecarManager {
                 return;
             }
 
-            // Re-spawn via AppState
             log::info!("Re-spawning sidecar...");
             match spawn_child_process(&restart_node_path, &restart_sidecar_path) {
                 Ok(spawned) => {
-                    let state: tauri::State<'_, crate::state::AppState> = app.state();
-                    let mut sidecar = state.sidecar.lock().await;
-                    sidecar.install_child(
-                        spawned,
-                        &restart_node_path,
-                        &restart_sidecar_path,
-                        app.clone(),
-                    );
+                    manager
+                        .clone()
+                        .install_child(
+                            spawned,
+                            restart_node_path.clone(),
+                            restart_sidecar_path.clone(),
+                            app.clone(),
+                        )
+                        .await;
 
                     log::info!("Sidecar restarted successfully");
                     let _ = app.emit(
@@ -214,23 +265,45 @@ impl SidecarManager {
                         }),
                     );
 
-                    // Clone atomics before dropping sidecar lock
-                    let stable_restart_count = sidecar.restart_count.clone();
-                    let stable_shutdown = sidecar.shutting_down.clone();
-                    drop(sidecar);
-
-                    // Stability monitor: reset counter after 5 min stable
-                    tokio::spawn(async move {
+                    // Stability monitor: reset counter after 5 min stable.
+                    // Cancel any prior monitor first so we don't pile up tasks.
+                    let prev_task = manager.stability_task.lock().await.take();
+                    if let Some(handle) = prev_task {
+                        handle.abort();
+                    }
+                    let shutdown_flag = manager.shutting_down.clone();
+                    let restart_count = manager.restart_count.clone();
+                    let new_task = tokio::spawn(async move {
                         tokio::time::sleep(std::time::Duration::from_secs(RESTART_WINDOW_SECS))
                             .await;
-                        if !stable_shutdown.load(Ordering::SeqCst) {
+                        if !shutdown_flag.load(Ordering::SeqCst) {
                             log::info!(
                                 "Sidecar stable for {} minutes, resetting restart counter",
                                 RESTART_WINDOW_SECS / 60
                             );
-                            stable_restart_count.store(0, Ordering::SeqCst);
+                            restart_count.store(0, Ordering::SeqCst);
                         }
                     });
+                    *manager.stability_task.lock().await = Some(new_task);
+
+                    // Re-connect to server if we had a prior successful connect.
+                    let maybe_params = manager.last_connect_params.lock().await.clone();
+                    if let Some(params) = maybe_params {
+                        log::info!("Re-connecting after restart...");
+                        match manager
+                            .request(
+                                "connect",
+                                Some(serde_json::json!({
+                                    "serverUrl": params.server_url,
+                                    "token": params.token,
+                                })),
+                            )
+                            .await
+                        {
+                            Ok(_) => log::info!("Auto-reconnect succeeded"),
+                            Err(e) => log::warn!("Auto-reconnect failed: {e}"),
+                        }
+                    }
                 }
                 Err(e) => {
                     log::error!("Failed to restart sidecar: {e}");
@@ -256,80 +329,140 @@ impl SidecarManager {
     }
 
     /// Send a request to the sidecar and await the response.
+    ///
+    /// The stdin lock is held only during the write; awaiting the response
+    /// does not hold any sidecar-wide lock.
     pub async fn request(
-        &mut self,
+        &self,
         method: &str,
         params: Option<Value>,
     ) -> Result<Value, String> {
-        let stdin = self.stdin.as_mut().ok_or("Sidecar not running")?;
-
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let req = IpcRequest {
             id,
             method: method.to_string(),
-            params,
+            params: params.clone(),
         };
-
         let line = encode_request(&req).map_err(|e| format!("Serialize error: {e}"))?;
 
         // Register pending response
         let (tx, rx) = oneshot::channel();
         self.pending.lock().await.insert(id, tx);
 
-        // Write to stdin
-        stdin
-            .write_all(line.as_bytes())
-            .await
-            .map_err(|e| format!("Failed to write to sidecar stdin: {e}"))?;
-        stdin
-            .flush()
-            .await
-            .map_err(|e| format!("Failed to flush sidecar stdin: {e}"))?;
+        // Write to stdin — hold the lock only for the write
+        {
+            let mut guard = self.stdin.lock().await;
+            let stdin = match guard.as_mut() {
+                Some(s) => s,
+                None => {
+                    self.pending.lock().await.remove(&id);
+                    return Err("Sidecar not running".to_string());
+                }
+            };
+            if let Err(e) = stdin.write_all(line.as_bytes()).await {
+                self.pending.lock().await.remove(&id);
+                return Err(format!("Failed to write to sidecar stdin: {e}"));
+            }
+            if let Err(e) = stdin.flush().await {
+                self.pending.lock().await.remove(&id);
+                return Err(format!("Failed to flush sidecar stdin: {e}"));
+            }
+        }
 
-        // Await response with timeout
-        match tokio::time::timeout(std::time::Duration::from_secs(10), rx).await {
+        // Await response with timeout (no locks held)
+        let result = match tokio::time::timeout(
+            std::time::Duration::from_secs(REQUEST_TIMEOUT_SECS),
+            rx,
+        )
+        .await
+        {
             Ok(Ok(result)) => result,
             Ok(Err(_)) => Err("Sidecar response channel closed".to_string()),
             Err(_) => {
                 self.pending.lock().await.remove(&id);
-                Err("Sidecar request timed out (10s)".to_string())
+                Err(format!(
+                    "Sidecar request timed out ({}s)",
+                    REQUEST_TIMEOUT_SECS
+                ))
             }
+        };
+
+        // Remember successful connect params for post-crash auto-reconnect
+        if method == "connect" && result.is_ok() {
+            if let Some(p) = params.as_ref() {
+                if let (Some(server), Some(token)) = (
+                    p.get("serverUrl").and_then(|v| v.as_str()),
+                    p.get("token").and_then(|v| v.as_str()),
+                ) {
+                    *self.last_connect_params.lock().await = Some(ConnectParams {
+                        server_url: server.to_string(),
+                        token: token.to_string(),
+                    });
+                }
+            }
+        } else if method == "disconnect" && result.is_ok() {
+            // Clear remembered params so a crash after intentional disconnect
+            // doesn't reconnect unexpectedly.
+            *self.last_connect_params.lock().await = None;
         }
+
+        result
     }
 
     /// Gracefully shut down the sidecar.
-    pub async fn shutdown(&mut self) -> Result<(), String> {
-        // Signal intentional shutdown
+    ///
+    /// Critically, this does NOT hold any shared sidecar lock while awaiting
+    /// the shutdown response. The reader task may complete during shutdown;
+    /// holding a lock here while it tries to run would deadlock.
+    pub async fn shutdown(&self) -> Result<(), String> {
+        // Signal intentional shutdown BEFORE sending the request so the
+        // reader task won't trigger auto-restart when the process exits.
         self.shutting_down.store(true, Ordering::SeqCst);
         self.shutdown_notify.notify_waiters();
 
-        if self.stdin.is_some() {
-            // Try to send shutdown command with a short timeout
-            let shutdown_result = tokio::time::timeout(
-                std::time::Duration::from_secs(3),
-                self.request("shutdown", None),
-            )
-            .await;
+        // Abort stability monitor if any
+        if let Some(handle) = self.stability_task.lock().await.take() {
+            handle.abort();
+        }
 
-            match shutdown_result {
+        // Send shutdown request with a short timeout (no outer lock held)
+        let stdin_present = self.stdin.lock().await.is_some();
+        if stdin_present {
+            let req_fut = self.request("shutdown", None);
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(SHUTDOWN_TIMEOUT_SECS),
+                req_fut,
+            )
+            .await
+            {
                 Ok(Ok(_)) => log::info!("Sidecar acknowledged shutdown"),
                 Ok(Err(e)) => log::warn!("Sidecar shutdown request failed: {e}"),
-                Err(_) => log::warn!("Sidecar shutdown request timed out (3s)"),
+                Err(_) => log::warn!(
+                    "Sidecar shutdown request timed out ({SHUTDOWN_TIMEOUT_SECS}s)"
+                ),
             }
         }
 
+        // Close stdin first so the child's readline EOFs
+        *self.stdin.lock().await = None;
+
         // Force kill if still running
-        if let Some(mut child) = self.child.take() {
+        if let Some(mut child) = self.child.lock().await.take() {
             let _ = child.kill().await;
         }
-        self.stdin = None;
-        self.pending.lock().await.clear();
+
+        // Clear pending and notify any remaining waiters
+        let drained: Vec<_> = self.pending.lock().await.drain().collect();
+        for (_, tx) in drained {
+            let _ = tx.send(Err("Sidecar shut down".to_string()));
+        }
+
         log::info!("Sidecar shut down");
         Ok(())
     }
 
-    pub fn is_running(&self) -> bool {
-        self.child.is_some()
+    pub async fn is_running(&self) -> bool {
+        self.child.lock().await.is_some()
     }
 }
 
@@ -353,7 +486,7 @@ async fn check_restart_limits(
 
     let count = restart_count.fetch_add(1, Ordering::SeqCst);
     *last_time = Some(now);
-    drop(last_time); // Release lock before sleep
+    drop(last_time);
 
     if count >= MAX_RESTARTS as u64 {
         log::error!(

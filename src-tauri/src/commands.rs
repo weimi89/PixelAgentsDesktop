@@ -20,8 +20,8 @@ fn settings_path() -> Result<PathBuf, String> {
 /// Return the current application status by querying the sidecar.
 #[tauri::command]
 pub async fn get_status(state: State<'_, AppState>) -> Result<Value, String> {
-    let mut sidecar = state.sidecar.lock().await;
-    if !sidecar.is_running() {
+    let sidecar = state.sidecar.clone();
+    if !sidecar.is_running().await {
         return Ok(json!({
             "sidecarStatus": "stopped",
             "connected": false,
@@ -167,8 +167,8 @@ pub async fn connect_server(
     token: String,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
-    let mut sidecar = state.sidecar.lock().await;
-    if !sidecar.is_running() {
+    let sidecar = state.sidecar.clone();
+    if !sidecar.is_running().await {
         return Err("Sidecar not running".to_string());
     }
     sidecar
@@ -182,8 +182,8 @@ pub async fn connect_server(
 /// Disconnect from the pixel-agents server.
 #[tauri::command]
 pub async fn disconnect_server(state: State<'_, AppState>) -> Result<Value, String> {
-    let mut sidecar = state.sidecar.lock().await;
-    if !sidecar.is_running() {
+    let sidecar = state.sidecar.clone();
+    if !sidecar.is_running().await {
         return Err("Sidecar not running".to_string());
     }
     sidecar.request("disconnect", None).await
@@ -201,8 +201,8 @@ pub async fn terminal_attach(
     rows: u32,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
-    let mut sidecar = state.sidecar.lock().await;
-    if !sidecar.is_running() {
+    let sidecar = state.sidecar.clone();
+    if !sidecar.is_running().await {
         return Err("Sidecar not running".to_string());
     }
     sidecar
@@ -224,8 +224,8 @@ pub async fn terminal_input(
     data: String,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
-    let mut sidecar = state.sidecar.lock().await;
-    if !sidecar.is_running() {
+    let sidecar = state.sidecar.clone();
+    if !sidecar.is_running().await {
         return Err("Sidecar not running".to_string());
     }
     sidecar
@@ -247,8 +247,8 @@ pub async fn terminal_resize(
     rows: u32,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
-    let mut sidecar = state.sidecar.lock().await;
-    if !sidecar.is_running() {
+    let sidecar = state.sidecar.clone();
+    if !sidecar.is_running().await {
         return Err("Sidecar not running".to_string());
     }
     sidecar
@@ -269,8 +269,8 @@ pub async fn terminal_detach(
     session_id: String,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
-    let mut sidecar = state.sidecar.lock().await;
-    if !sidecar.is_running() {
+    let sidecar = state.sidecar.clone();
+    if !sidecar.is_running().await {
         return Err("Sidecar not running".to_string());
     }
     sidecar
@@ -322,8 +322,8 @@ pub async fn update_scan_interval(
     interval_ms: u32,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
-    let mut sidecar = state.sidecar.lock().await;
-    if !sidecar.is_running() {
+    let sidecar = state.sidecar.clone();
+    if !sidecar.is_running().await {
         return Err("Sidecar not running".to_string());
     }
     sidecar
@@ -340,8 +340,8 @@ pub async fn update_excluded_projects(
     projects: Vec<String>,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
-    let mut sidecar = state.sidecar.lock().await;
-    if !sidecar.is_running() {
+    let sidecar = state.sidecar.clone();
+    if !sidecar.is_running().await {
         return Err("Sidecar not running".to_string());
     }
     sidecar
@@ -355,12 +355,9 @@ pub async fn update_excluded_projects(
 /// Logout: disconnect sidecar and delete config file.
 #[tauri::command]
 pub async fn logout(state: State<'_, AppState>) -> Result<Value, String> {
-    // Disconnect sidecar
-    {
-        let mut sidecar = state.sidecar.lock().await;
-        if sidecar.is_running() {
-            let _ = sidecar.request("disconnect", None).await;
-        }
+    let sidecar = state.sidecar.clone();
+    if sidecar.is_running().await {
+        let _ = sidecar.request("disconnect", None).await;
     }
 
     // Delete config file

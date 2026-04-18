@@ -63,11 +63,18 @@ pub fn run() {
             log::info!("Node path: {node_path}");
             log::info!("Sidecar path: {sidecar_path}");
 
-            // Spawn sidecar in background, then auto-connect if config exists
+            // Spawn sidecar in background, then auto-connect if config exists.
+            // No outer lock is held — SidecarManager uses internal synchronization.
             tauri::async_runtime::spawn(async move {
-                let state: tauri::State<'_, AppState> = app_handle.state();
-                let mut sidecar = state.sidecar.lock().await;
-                if let Err(e) = sidecar.spawn(&node_path, &sidecar_path, app_handle.clone()).await
+                let sidecar = {
+                    let state: tauri::State<'_, AppState> = app_handle.state();
+                    state.sidecar.clone()
+                };
+
+                if let Err(e) = sidecar
+                    .clone()
+                    .spawn(&node_path, &sidecar_path, app_handle.clone())
+                    .await
                 {
                     log::error!("Failed to spawn sidecar: {e}");
                     return;
@@ -115,9 +122,11 @@ pub fn run() {
             log::info!("Exit requested, shutting down sidecar...");
             let handle = app_handle.clone();
             tauri::async_runtime::block_on(async move {
-                let state: tauri::State<'_, AppState> = handle.state();
-                let mut sidecar = state.sidecar.lock().await;
-                if sidecar.is_running() {
+                let sidecar = {
+                    let state: tauri::State<'_, AppState> = handle.state();
+                    state.sidecar.clone()
+                };
+                if sidecar.is_running().await {
                     if let Err(e) = sidecar.shutdown().await {
                         log::error!("Error during sidecar shutdown: {e}");
                     }

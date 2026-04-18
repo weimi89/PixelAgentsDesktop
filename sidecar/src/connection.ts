@@ -122,7 +122,9 @@ export class AgentNodeConnection {
 		});
 
 		this.socket.on('connect_error', (err) => {
-			console.error(`[Agent Node] Connection error: ${err.message}`);
+			// 不印 err.message — Socket.IO 的錯誤訊息可能含 auth payload 或 token
+			const safeName = err && typeof err === 'object' && 'name' in err ? String(err.name) : 'ConnectError';
+			console.error(`[Agent Node] Connection error (${safeName})`);
 		});
 
 		this.socket.io.on('reconnect', () => {

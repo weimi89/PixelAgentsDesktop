@@ -86,14 +86,14 @@ export class Bridge {
 				this._connected = true;
 				this._onEvent({
 					event: 'connectionStatus',
-					data: { status: 'connected', userId },
+					data: { connected: true, status: 'connected', userId },
 				});
 			},
 			onError: (message) => {
 				console.error(`[Bridge] Server error: ${message}`);
 				this._onEvent({
 					event: 'connectionStatus',
-					data: { status: 'error', message },
+					data: { connected: false, status: 'error', message },
 				});
 			},
 			onAgentRegistered: (sessionId, agentId) => {
@@ -101,9 +101,10 @@ export class Bridge {
 			},
 			onDisconnect: (reason) => {
 				this._connected = false;
+				this.emitAgentStoppedForAll();
 				this._onEvent({
 					event: 'connectionStatus',
-					data: { status: 'disconnected', reason },
+					data: { connected: false, status: 'disconnected', reason },
 				});
 			},
 			onReconnect: () => {
@@ -111,7 +112,7 @@ export class Bridge {
 				console.log('[Bridge] Reconnected — re-scanning...');
 				this._onEvent({
 					event: 'connectionStatus',
-					data: { status: 'connected' },
+					data: { connected: true, status: 'connected' },
 				});
 			},
 			onExcludedProjectsSync: (excluded) => {
@@ -136,6 +137,9 @@ export class Bridge {
 	 * Disconnect from the server and stop all watchers.
 	 */
 	disconnect(): void {
+		// 通知前端所有 agent 已停止（否則 UI 會殘留）
+		this.emitAgentStoppedForAll();
+
 		if (this.scanner) {
 			this.scanner.stop();
 			this.scanner = null;
@@ -148,7 +152,24 @@ export class Bridge {
 			this.connection.disconnect();
 			this.connection = null;
 		}
+		const wasConnected = this._connected;
 		this._connected = false;
+		if (wasConnected) {
+			this._onEvent({
+				event: 'connectionStatus',
+				data: { connected: false, status: 'disconnected' },
+			});
+		}
+	}
+
+	private emitAgentStoppedForAll(): void {
+		if (this._agents.size === 0) return;
+		for (const sessionId of this._agents.keys()) {
+			this._onEvent({
+				event: 'agentStopped',
+				data: { sessionId },
+			});
+		}
 		this._agents.clear();
 	}
 

@@ -36,9 +36,73 @@ console.warn = (...args: unknown[]) => {
 
 // ── IPC send helpers ──
 
+/** 背壓待排佇列；stdout drain 後依序寫出。 */
+const pendingWrites: string[] = [];
+let drainListenerAttached = false;
+/** 同一 sessionId 的 terminalData 會被合併到這個暫存區（16ms window）。 */
+const terminalDataBuffer = new Map<string, string>();
+let terminalFlushTimer: ReturnType<typeof setTimeout> | null = null;
+const TERMINAL_COALESCE_MS = 16;
+
+function flushPending(): void {
+  while (pendingWrites.length > 0) {
+    const next = pendingWrites[0];
+    const ok = process.stdout.write(next);
+    if (!ok) {
+      // 尚未 drain；等下次事件再繼續
+      if (!drainListenerAttached) {
+        drainListenerAttached = true;
+        process.stdout.once('drain', () => {
+          drainListenerAttached = false;
+          flushPending();
+        });
+      }
+      return;
+    }
+    pendingWrites.shift();
+  }
+}
+
+function writeLine(line: string): void {
+  if (pendingWrites.length > 0) {
+    pendingWrites.push(line);
+    return;
+  }
+  const ok = process.stdout.write(line);
+  if (!ok) {
+    // kernel pipe buffer 已滿 — 之後寫入排進 queue
+    if (!drainListenerAttached) {
+      drainListenerAttached = true;
+      process.stdout.once('drain', () => {
+        drainListenerAttached = false;
+        flushPending();
+      });
+    }
+  }
+}
+
 function send(msg: IpcResponse | IpcEvent): void {
-  const line = JSON.stringify(msg);
-  process.stdout.write(line + '\n');
+  // 高頻 terminalData 合併以降低 IPC 量
+  if ('event' in msg && msg.event === 'terminalData') {
+    const data = msg.data as { sessionId?: string; data?: string } | undefined;
+    if (data && typeof data.sessionId === 'string' && typeof data.data === 'string') {
+      const prev = terminalDataBuffer.get(data.sessionId) ?? '';
+      terminalDataBuffer.set(data.sessionId, prev + data.data);
+      if (!terminalFlushTimer) {
+        terminalFlushTimer = setTimeout(flushTerminalBuffer, TERMINAL_COALESCE_MS);
+      }
+      return;
+    }
+  }
+  writeLine(JSON.stringify(msg) + '\n');
+}
+
+function flushTerminalBuffer(): void {
+  terminalFlushTimer = null;
+  for (const [sessionId, data] of terminalDataBuffer) {
+    writeLine(JSON.stringify({ event: 'terminalData', data: { sessionId, data } }) + '\n');
+  }
+  terminalDataBuffer.clear();
 }
 
 function sendResponse(id: number, result?: unknown, error?: string): void {
