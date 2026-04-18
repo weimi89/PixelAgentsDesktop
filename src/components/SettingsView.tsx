@@ -14,178 +14,158 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { useLocaleStore, useTranslation, type LocaleCode } from "../i18n";
 import { checkForUpdate, type UpdateCheckResult } from "../lib/updater";
-import { useThemeStore, type ThemeMode } from "../theme";
+import { useThemeStore, useThemeColors, type ThemeMode } from "../theme";
 
 const APP_VERSION = "0.1.0";
 const GITHUB_URL = "https://github.com/nicepkg/pixel-agents-desktop";
 
-const styles = {
-  container: {
-    maxWidth: 600,
-    margin: "0 auto",
-  },
-  section: {
-    marginBottom: "24px",
-    background: "#181825",
-    border: "2px solid #313244",
-    borderRadius: 0,
-    padding: "16px",
-  },
-  sectionTitle: {
-    fontSize: "14px",
-    fontWeight: 700,
-    color: "#89b4fa",
-    margin: "0 0 12px 0",
-    fontFamily: "monospace",
-    textTransform: "uppercase" as const,
-    letterSpacing: "1px",
-  },
-  row: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "8px 0",
-    borderBottom: "1px solid #313244",
-  },
-  rowLast: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "8px 0",
-  },
-  label: {
-    fontSize: "13px",
-    color: "#cdd6f4",
-    fontFamily: "monospace",
-  },
-  value: {
-    fontSize: "13px",
-    color: "#a6adc8",
-    fontFamily: "monospace",
-  },
-  input: {
-    padding: "4px 8px",
-    background: "#1e1e2e",
-    border: "2px solid #45475a",
-    borderRadius: 0,
-    color: "#cdd6f4",
-    fontSize: "13px",
-    fontFamily: "monospace",
-    outline: "none",
-    width: "200px",
-    boxSizing: "border-box" as const,
-  },
-  button: {
-    padding: "6px 14px",
-    background: "#89b4fa",
-    color: "#1e1e2e",
-    border: "none",
-    borderRadius: 0,
-    cursor: "pointer",
-    fontWeight: 700,
-    fontSize: "12px",
-    fontFamily: "monospace",
-  },
-  dangerButton: {
-    padding: "6px 14px",
-    background: "#f38ba8",
-    color: "#1e1e2e",
-    border: "none",
-    borderRadius: 0,
-    cursor: "pointer",
-    fontWeight: 700,
-    fontSize: "12px",
-    fontFamily: "monospace",
-  },
-  smallButton: {
-    padding: "4px 10px",
-    background: "#45475a",
-    color: "#cdd6f4",
-    border: "none",
-    borderRadius: 0,
-    cursor: "pointer",
-    fontWeight: 400,
-    fontSize: "11px",
-    fontFamily: "monospace",
-  },
-  removeButton: {
-    padding: "2px 8px",
-    background: "#45475a",
-    color: "#f38ba8",
-    border: "none",
-    borderRadius: 0,
-    cursor: "pointer",
-    fontSize: "11px",
-    fontFamily: "monospace",
-    marginLeft: "8px",
-  },
-  checkbox: {
-    marginRight: "8px",
-    accentColor: "#89b4fa",
-  },
-  checkboxRow: {
-    display: "flex",
-    alignItems: "center",
-    padding: "8px 0",
-    cursor: "pointer",
-  },
-  sliderContainer: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-  },
-  slider: {
-    width: "120px",
-    accentColor: "#89b4fa",
-  },
-  sliderValue: {
-    fontSize: "13px",
-    color: "#89b4fa",
-    fontFamily: "monospace",
-    fontWeight: 700,
-    minWidth: "30px",
-    textAlign: "right" as const,
-  },
-  tag: {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "2px 8px",
-    background: "#313244",
-    border: "1px solid #45475a",
-    borderRadius: 0,
-    fontSize: "12px",
-    fontFamily: "monospace",
-    color: "#cdd6f4",
-    margin: "2px 4px 2px 0",
-  },
-  tagList: {
-    display: "flex",
-    flexWrap: "wrap" as const,
-    gap: "4px",
-    marginTop: "8px",
-  },
-  addRow: {
-    display: "flex",
-    gap: "8px",
-    marginTop: "8px",
-  },
-  link: {
-    color: "#89b4fa",
-    textDecoration: "none",
-    fontSize: "13px",
-    fontFamily: "monospace",
-    cursor: "pointer",
-  },
-  emptyText: {
-    fontSize: "12px",
-    color: "#6c7086",
-    fontFamily: "monospace",
-    fontStyle: "italic" as const,
-  },
-} as const;
+function useStyles() {
+  const c = useThemeColors();
+  return {
+    container: { maxWidth: 600, margin: "0 auto" },
+    section: {
+      marginBottom: "24px",
+      background: c.bgSurface,
+      border: `2px solid ${c.bgElevated}`,
+      borderRadius: 0,
+      padding: "16px",
+    },
+    sectionTitle: {
+      fontSize: "14px",
+      fontWeight: 700,
+      color: c.accent,
+      margin: "0 0 12px 0",
+      fontFamily: "monospace",
+      textTransform: "uppercase" as const,
+      letterSpacing: "1px",
+    },
+    row: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "8px 0",
+      borderBottom: `1px solid ${c.bgElevated}`,
+    },
+    rowLast: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "8px 0",
+    },
+    label: { fontSize: "13px", color: c.text, fontFamily: "monospace" },
+    value: { fontSize: "13px", color: c.textDim, fontFamily: "monospace" },
+    input: {
+      padding: "4px 8px",
+      background: c.bg,
+      border: `2px solid ${c.border}`,
+      borderRadius: 0,
+      color: c.text,
+      fontSize: "13px",
+      fontFamily: "monospace",
+      outline: "none",
+      width: "200px",
+      boxSizing: "border-box" as const,
+    },
+    button: {
+      padding: "6px 14px",
+      background: c.accent,
+      color: c.bg,
+      border: "none",
+      borderRadius: 0,
+      cursor: "pointer",
+      fontWeight: 700,
+      fontSize: "12px",
+      fontFamily: "monospace",
+    },
+    dangerButton: {
+      padding: "6px 14px",
+      background: c.error,
+      color: c.bg,
+      border: "none",
+      borderRadius: 0,
+      cursor: "pointer",
+      fontWeight: 700,
+      fontSize: "12px",
+      fontFamily: "monospace",
+    },
+    smallButton: {
+      padding: "4px 10px",
+      background: c.controlBg,
+      color: c.text,
+      border: "none",
+      borderRadius: 0,
+      cursor: "pointer",
+      fontWeight: 400,
+      fontSize: "11px",
+      fontFamily: "monospace",
+    },
+    removeButton: {
+      padding: "2px 8px",
+      background: c.controlBg,
+      color: c.error,
+      border: "none",
+      borderRadius: 0,
+      cursor: "pointer",
+      fontSize: "11px",
+      fontFamily: "monospace",
+      marginLeft: "8px",
+    },
+    checkbox: { marginRight: "8px", accentColor: c.accent },
+    checkboxRow: {
+      display: "flex",
+      alignItems: "center",
+      padding: "8px 0",
+      cursor: "pointer",
+    },
+    sliderContainer: { display: "flex", alignItems: "center", gap: "12px" },
+    slider: { width: "120px", accentColor: c.accent },
+    sliderValue: {
+      fontSize: "13px",
+      color: c.accent,
+      fontFamily: "monospace",
+      fontWeight: 700,
+      minWidth: "30px",
+      textAlign: "right" as const,
+    },
+    tag: {
+      display: "inline-flex",
+      alignItems: "center",
+      padding: "2px 8px",
+      background: c.bgElevated,
+      border: `1px solid ${c.border}`,
+      borderRadius: 0,
+      fontSize: "12px",
+      fontFamily: "monospace",
+      color: c.tagText,
+      margin: "2px 4px 2px 0",
+    },
+    tagList: {
+      display: "flex",
+      flexWrap: "wrap" as const,
+      gap: "4px",
+      marginTop: "8px",
+    },
+    addRow: { display: "flex", gap: "8px", marginTop: "8px" },
+    link: {
+      color: c.accent,
+      textDecoration: "none",
+      fontSize: "13px",
+      fontFamily: "monospace",
+      cursor: "pointer",
+    },
+    emptyText: {
+      fontSize: "12px",
+      color: c.textMuted,
+      fontFamily: "monospace",
+      fontStyle: "italic" as const,
+    },
+  } as const;
+}
 
 export function SettingsView() {
   const t = useTranslation();
+  const styles = useStyles();
+  const c = useThemeColors();
   const locale = useLocaleStore((s) => s.locale);
   const setLocale = useLocaleStore((s) => s.setLocale);
   const themeMode = useThemeStore((s) => s.mode);
@@ -356,7 +336,7 @@ export function SettingsView() {
         </div>
         <div style={styles.row}>
           <span style={styles.label}>{t("settings.statusLabel")}</span>
-          <span style={{ ...styles.value, color: configUsername ? "#a6e3a1" : "#f38ba8" }}>
+          <span style={{ ...styles.value, color: configUsername ? c.success : c.error }}>
             {configUsername ? t("settings.statusConnected") : t("settings.statusDisconnected")}
           </span>
         </div>
@@ -433,9 +413,9 @@ export function SettingsView() {
           <span style={styles.label}>{t("settingsExtra.language")}</span>
           <select
             style={{
-              background: "#1e1e2e",
-              color: "#cdd6f4",
-              border: "2px solid #45475a",
+              background: c.bg,
+              color: c.text,
+              border: `2px solid ${c.border}`,
               borderRadius: 0,
               padding: "4px 8px",
               fontFamily: "monospace",
@@ -454,9 +434,9 @@ export function SettingsView() {
           <span style={styles.label}>{t("settingsExtra.theme")}</span>
           <select
             style={{
-              background: "#1e1e2e",
-              color: "#cdd6f4",
-              border: "2px solid #45475a",
+              background: c.bg,
+              color: c.text,
+              border: `2px solid ${c.border}`,
               borderRadius: 0,
               padding: "4px 8px",
               fontFamily: "monospace",
@@ -523,7 +503,7 @@ export function SettingsView() {
             </div>
             <div style={styles.row}>
               <span style={styles.label}>{t("diagnostics.ipcErrors")}</span>
-              <span style={{ ...styles.value, color: diagnostics.ipc.requestErrors > 0 ? "#f38ba8" : undefined }}>
+              <span style={{ ...styles.value, color: diagnostics.ipc.requestErrors > 0 ? c.error : undefined }}>
                 {diagnostics.ipc.requestErrors}
               </span>
             </div>
@@ -537,13 +517,13 @@ export function SettingsView() {
             </div>
             <div style={styles.row}>
               <span style={styles.label}>{t("diagnostics.sidecarRestarts")}</span>
-              <span style={{ ...styles.value, color: diagnostics.sidecar.restarts > 0 ? "#fab387" : undefined }}>
+              <span style={{ ...styles.value, color: diagnostics.sidecar.restarts > 0 ? c.warning : undefined }}>
                 {diagnostics.sidecar.restarts}
               </span>
             </div>
             <div style={styles.row}>
               <span style={styles.label}>{t("diagnostics.sidecarCrashes")}</span>
-              <span style={{ ...styles.value, color: diagnostics.sidecar.crashes > 0 ? "#f38ba8" : undefined }}>
+              <span style={{ ...styles.value, color: diagnostics.sidecar.crashes > 0 ? c.error : undefined }}>
                 {diagnostics.sidecar.crashes}
               </span>
             </div>
@@ -570,9 +550,9 @@ export function SettingsView() {
             <div style={styles.row}>
               <span style={styles.label}>{t("crashes.count", { n: crashes.count })}</span>
               {crashes.count > 0 ? (
-                <span style={{ ...styles.value, color: "#f38ba8" }}>⚠ {crashes.count}</span>
+                <span style={{ ...styles.value, color: c.error }}>⚠ {crashes.count}</span>
               ) : (
-                <span style={{ ...styles.value, color: "#a6e3a1" }}>{t("crashes.none")}</span>
+                <span style={{ ...styles.value, color: c.success }}>{t("crashes.none")}</span>
               )}
             </div>
             <div style={styles.row}>
@@ -584,7 +564,7 @@ export function SettingsView() {
             <div style={styles.rowLast}>
               <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                 {clearMessage && (
-                  <span style={{ ...styles.value, color: "#a6e3a1", fontSize: "11px" }}>
+                  <span style={{ ...styles.value, color: c.success, fontSize: "11px" }}>
                     {clearMessage}
                   </span>
                 )}
@@ -656,10 +636,11 @@ interface UpdateStatusProps {
 
 function UpdateStatus({ state, onCheck, onDownload }: UpdateStatusProps) {
   const t = useTranslation();
+  const c = useThemeColors();
   const smallButton = {
     padding: "4px 10px",
-    background: "#45475a",
-    color: "#cdd6f4",
+    background: c.controlBg,
+    color: c.text,
     border: "none",
     borderRadius: 0,
     cursor: "pointer",
@@ -669,7 +650,7 @@ function UpdateStatus({ state, onCheck, onDownload }: UpdateStatusProps) {
   } as const;
   const text = {
     fontSize: "12px",
-    color: "#a6adc8",
+    color: c.textDim,
     fontFamily: "monospace",
   } as const;
 
@@ -690,19 +671,19 @@ function UpdateStatus({ state, onCheck, onDownload }: UpdateStatusProps) {
   const r = state.result;
   switch (r.kind) {
     case "noUpdate":
-      return <span style={{ ...text, color: "#a6e3a1" }}>{t("updater.upToDate")}</span>;
+      return <span style={{ ...text, color: c.success }}>{t("updater.upToDate")}</span>;
     case "notConfigured":
       return <span style={{ ...text, fontStyle: "italic" }}>{t("updater.notConfigured")}</span>;
     case "error":
       return (
-        <span style={{ ...text, color: "#f38ba8" }}>
+        <span style={{ ...text, color: c.error }}>
           {t("updater.error", { message: r.message })}
         </span>
       );
     case "available":
       return (
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ ...text, color: "#fab387" }}>
+          <span style={{ ...text, color: c.warning }}>
             {t("updater.available", { version: r.version })}
           </span>
           <button style={smallButton} onClick={onDownload}>

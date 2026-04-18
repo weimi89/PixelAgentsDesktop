@@ -6,6 +6,7 @@ import * as fsp from 'fs/promises';
 import * as path from 'path';
 import type { AgentNodeEvent } from '../../shared/protocol.js';
 import { parseJsonlLine } from './parser.js';
+import { markAsync } from './perfMark.js';
 
 interface TrackedAgent {
 	sessionId: string;
@@ -145,6 +146,10 @@ export class AgentTracker {
 		// 重入保護 — fs.watch 與 polling timer 可能同時觸發
 		if (agent.reading) return;
 		agent.reading = true;
+		await markAsync('agentTracker.readNewLines', () => this.readNewLinesInner(agent));
+	}
+
+	private async readNewLinesInner(agent: TrackedAgent): Promise<void> {
 
 		let handle: fsp.FileHandle | null = null;
 		try {

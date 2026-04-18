@@ -10,79 +10,84 @@ import {
 } from "../tauri-api";
 import type { SidecarEvent } from "../tauri-api";
 import { useTranslation } from "../i18n";
+import { useThemeColors } from "../theme";
 
 import "@xterm/xterm/css/xterm.css";
 
-const styles = {
-  container: {
-    display: "flex",
-    flexDirection: "column" as const,
-    height: "100%",
-    gap: 0,
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    padding: "8px 12px",
-    background: "#181825",
-    borderBottom: "2px solid #313244",
-    flexShrink: 0,
-  },
-  label: {
-    color: "#6c7086",
-    fontSize: "12px",
-    fontFamily: "monospace",
-    whiteSpace: "nowrap" as const,
-  },
-  select: {
-    flex: 1,
-    background: "#313244",
-    color: "#cdd6f4",
-    border: "1px solid #45475a",
-    borderRadius: 0,
-    padding: "4px 8px",
-    fontSize: "12px",
-    fontFamily: "monospace",
-    cursor: "pointer",
-    outline: "none",
-  },
-  statusDot: (ready: boolean) => ({
-    width: "8px",
-    height: "8px",
-    borderRadius: "50%",
-    background: ready ? "#a6e3a1" : "#6c7086",
-    flexShrink: 0,
-  }),
-  terminalWrapper: {
-    flex: 1,
-    overflow: "hidden",
-    background: "#1e1e2e",
-    padding: "4px",
-    minHeight: 0,
-  },
-  placeholder: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    height: "100%",
-    color: "#6c7086",
-    fontSize: "13px",
-    fontFamily: "monospace",
-  },
-  exitMessage: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    height: "100%",
-    color: "#f38ba8",
-    fontSize: "13px",
-    fontFamily: "monospace",
-  },
-};
+function useStyles() {
+  const c = useThemeColors();
+  return {
+    container: {
+      display: "flex",
+      flexDirection: "column" as const,
+      height: "100%",
+      gap: 0,
+    },
+    header: {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      padding: "8px 12px",
+      background: c.bgSurface,
+      borderBottom: `2px solid ${c.bgElevated}`,
+      flexShrink: 0,
+    },
+    label: {
+      color: c.textMuted,
+      fontSize: "12px",
+      fontFamily: "monospace",
+      whiteSpace: "nowrap" as const,
+    },
+    select: {
+      flex: 1,
+      background: c.bgElevated,
+      color: c.text,
+      border: `1px solid ${c.border}`,
+      borderRadius: 0,
+      padding: "4px 8px",
+      fontSize: "12px",
+      fontFamily: "monospace",
+      cursor: "pointer",
+      outline: "none",
+    },
+    statusDot: (ready: boolean) => ({
+      width: "8px",
+      height: "8px",
+      borderRadius: "50%",
+      background: ready ? c.success : c.textMuted,
+      flexShrink: 0,
+    }),
+    terminalWrapper: {
+      flex: 1,
+      overflow: "hidden",
+      background: c.terminalBg,
+      padding: "4px",
+      minHeight: 0,
+    },
+    placeholder: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "100%",
+      color: c.textMuted,
+      fontSize: "13px",
+      fontFamily: "monospace",
+    },
+    exitMessage: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "100%",
+      color: c.error,
+      fontSize: "13px",
+      fontFamily: "monospace",
+    },
+  } as const;
+}
 
 export function TerminalPanel() {
   const t = useTranslation();
+  const styles = useStyles();
   const agents = useAgentStore((s) => s.agents);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     null,

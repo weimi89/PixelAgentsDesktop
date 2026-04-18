@@ -17,6 +17,14 @@ export interface ThemeColors {
   warning: string;
   error: string;
   info: string;
+  /** 強調色透明疊加（例如 selection / hover 高亮），0.2 alpha */
+  accentAlpha: string;
+  /** Tag / badge 預設前景色 */
+  tagText: string;
+  /** 次要互動元件背景（select / 次按鈕） */
+  controlBg: string;
+  /** 終端機背景（通常比 bg 深一點） */
+  terminalBg: string;
 }
 
 export const DARK_THEME: ThemeColors = {
@@ -34,6 +42,10 @@ export const DARK_THEME: ThemeColors = {
   warning: "#f9e2af",
   error: "#f38ba8",
   info: "#89dceb",
+  accentAlpha: "rgba(137, 180, 250, 0.2)",
+  tagText: "#cdd6f4",
+  controlBg: "#45475a",
+  terminalBg: "#1e1e2e",
 };
 
 export const LIGHT_THEME: ThemeColors = {
@@ -51,6 +63,10 @@ export const LIGHT_THEME: ThemeColors = {
   warning: "#df8e1d",
   error: "#d20f39",
   info: "#04a5e5",
+  accentAlpha: "rgba(30, 102, 245, 0.15)",
+  tagText: "#4c4f69",
+  controlBg: "#ccd0da",
+  terminalBg: "#e6e9ef",
 };
 
 interface ThemeState {

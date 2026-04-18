@@ -107,3 +107,77 @@ export interface TerminalExitPayload extends SessionPayload {
 export function isTerminalExitPayload(p: unknown): p is TerminalExitPayload {
   return isSessionPayload(p);
 }
+
+// ---------- 設定檔 Schema ----------
+//
+// ~/.pixel-agents/desktop-settings.json 是使用者可手動編輯的純 JSON，
+// loadSettings 讀入時以此驗證並逐欄回退到預設值；避免使用者打錯格式
+// 時 Zustand store 被塞入型別錯誤值、後續 UI 當掉。
+
+export interface DesktopSettingsShape {
+  scanIntervalMs: number;
+  excludedProjects: string[];
+  autoStart: boolean;
+  startMinimized: boolean;
+}
+
+export const DESKTOP_SETTINGS_DEFAULTS: DesktopSettingsShape = {
+  scanIntervalMs: 1000,
+  excludedProjects: [],
+  autoStart: false,
+  startMinimized: false,
+};
+
+const SCAN_INTERVAL_MIN = 500;
+const SCAN_INTERVAL_MAX = 600000;
+
+/**
+ * 驗證並清理使用者提供的 settings JSON；任何欄位型別不符或超出合理範圍，
+ * 回退到預設值並記錄 warning。返回結果保證符合 DesktopSettingsShape。
+ */
+export function parseDesktopSettings(raw: unknown): DesktopSettingsShape {
+  if (!isObject(raw)) return { ...DESKTOP_SETTINGS_DEFAULTS };
+
+  const warnings: string[] = [];
+  const out: DesktopSettingsShape = { ...DESKTOP_SETTINGS_DEFAULTS };
+
+  if (isNumber(raw.scanIntervalMs)) {
+    if (raw.scanIntervalMs < SCAN_INTERVAL_MIN || raw.scanIntervalMs > SCAN_INTERVAL_MAX) {
+      warnings.push(
+        `scanIntervalMs ${raw.scanIntervalMs} 超出範圍 [${SCAN_INTERVAL_MIN}, ${SCAN_INTERVAL_MAX}]，使用預設值`,
+      );
+    } else {
+      out.scanIntervalMs = raw.scanIntervalMs;
+    }
+  } else if (raw.scanIntervalMs !== undefined) {
+    warnings.push(`scanIntervalMs 型別錯誤，需為 number`);
+  }
+
+  if (Array.isArray(raw.excludedProjects)) {
+    const filtered = raw.excludedProjects.filter((x): x is string => isString(x));
+    if (filtered.length !== raw.excludedProjects.length) {
+      warnings.push("excludedProjects 中的非字串元素已被忽略");
+    }
+    out.excludedProjects = filtered;
+  } else if (raw.excludedProjects !== undefined) {
+    warnings.push("excludedProjects 型別錯誤，需為 string[]");
+  }
+
+  if (typeof raw.autoStart === "boolean") {
+    out.autoStart = raw.autoStart;
+  } else if (raw.autoStart !== undefined) {
+    warnings.push("autoStart 型別錯誤，需為 boolean");
+  }
+
+  if (typeof raw.startMinimized === "boolean") {
+    out.startMinimized = raw.startMinimized;
+  } else if (raw.startMinimized !== undefined) {
+    warnings.push("startMinimized 型別錯誤，需為 boolean");
+  }
+
+  if (warnings.length > 0) {
+    console.warn("[settings] 設定檔格式問題：\n" + warnings.map((w) => "  - " + w).join("\n"));
+  }
+
+  return out;
+}

@@ -39,6 +39,8 @@ export function ThemeApplier() {
       root.style.setProperty("--pixel-warning", colors.warning);
       root.style.setProperty("--pixel-error", colors.error);
       root.style.setProperty("--pixel-info", colors.info);
+      root.style.setProperty("--pixel-accent-alpha", colors.accentAlpha);
+      root.style.setProperty("--pixel-terminal-bg", colors.terminalBg);
       setResolved(resolved);
     };
 

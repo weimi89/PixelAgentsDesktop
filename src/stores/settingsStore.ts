@@ -1,19 +1,15 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
+import { parseDesktopSettings, DESKTOP_SETTINGS_DEFAULTS } from "../lib/validators";
 
-export interface DesktopSettings {
+export type DesktopSettings = {
   scanIntervalMs: number;
   excludedProjects: string[];
   autoStart: boolean;
   startMinimized: boolean;
-}
-
-const DEFAULT_SETTINGS: DesktopSettings = {
-  scanIntervalMs: 1000,
-  excludedProjects: [],
-  autoStart: false,
-  startMinimized: false,
 };
+
+const DEFAULT_SETTINGS: DesktopSettings = DESKTOP_SETTINGS_DEFAULTS;
 
 /** Debounce 寫盤 / IPC — 滑桿拖動等連續操作不應觸發多次磁碟寫入。 */
 const PERSIST_DEBOUNCE_MS = 250;
@@ -98,15 +94,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   loadSettings: async () => {
     try {
-      const raw = await invoke<DesktopSettings | null>("load_settings");
+      const raw = await invoke<unknown>("load_settings");
       if (raw) {
-        set({
-          scanIntervalMs: raw.scanIntervalMs ?? DEFAULT_SETTINGS.scanIntervalMs,
-          excludedProjects: raw.excludedProjects ?? DEFAULT_SETTINGS.excludedProjects,
-          autoStart: raw.autoStart ?? DEFAULT_SETTINGS.autoStart,
-          startMinimized: raw.startMinimized ?? DEFAULT_SETTINGS.startMinimized,
-          loaded: true,
-        });
+        // 透過 schema 驗證 + 回退，避免使用者手動編輯 JSON 打錯
+        // 型別時把錯誤值塞進 store。
+        const parsed = parseDesktopSettings(raw);
+        set({ ...parsed, loaded: true });
       } else {
         set({ loaded: true });
       }

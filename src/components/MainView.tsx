@@ -7,6 +7,7 @@ import { useTranslation } from "../i18n";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useConnectionStore } from "../stores/connectionStore";
 import { disconnect as invokeDisconnect } from "../tauri-api";
+import { useThemeColors } from "../theme";
 
 // TerminalPanel 引入 xterm.js（~200KB），僅在使用者切到「終端機」分頁時才載入，
 // 其他分頁啟動時不需等待 xterm 下載與初始化。
@@ -16,47 +17,51 @@ const TerminalPanel = lazy(() =>
 
 type TabId = "agents" | "terminal" | "logs" | "settings";
 
-const styles = {
-  container: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column" as const,
-    minHeight: 0,
-  },
-  tabBar: {
-    display: "flex",
-    background: "#181825",
-    borderBottom: "2px solid #313244",
-  },
-  tab: (active: boolean) => ({
-    padding: "8px 20px",
-    background: active ? "#313244" : "transparent",
-    color: active ? "#cdd6f4" : "#6c7086",
-    border: "none",
-    borderBottom: active ? "2px solid #89b4fa" : "2px solid transparent",
-    cursor: "pointer",
-    fontSize: "13px",
-    fontFamily: "monospace",
-    fontWeight: active ? 700 : 400,
-    marginBottom: "-2px",
-    borderRadius: 0,
-  }),
-  content: {
-    flex: 1,
-    overflow: "auto",
-    padding: "16px",
-  },
-} as const;
+function useStyles() {
+  const c = useThemeColors();
+  return {
+    container: {
+      flex: 1,
+      display: "flex",
+      flexDirection: "column" as const,
+      minHeight: 0,
+    },
+    tabBar: {
+      display: "flex",
+      background: c.bgSurface,
+      borderBottom: `2px solid ${c.bgElevated}`,
+    },
+    tab: (active: boolean) => ({
+      padding: "8px 20px",
+      background: active ? c.bgElevated : "transparent",
+      color: active ? c.text : c.textMuted,
+      border: "none",
+      borderBottom: active ? `2px solid ${c.accent}` : "2px solid transparent",
+      cursor: "pointer",
+      fontSize: "13px",
+      fontFamily: "monospace",
+      fontWeight: active ? 700 : 400,
+      marginBottom: "-2px",
+      borderRadius: 0,
+    }),
+    content: {
+      flex: 1,
+      overflow: "auto",
+      padding: "16px",
+    },
+  } as const;
+}
 
 function TerminalFallback() {
   const t = useTranslation();
+  const c = useThemeColors();
   return (
     <div style={{
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
       height: "100%",
-      color: "#6c7086",
+      color: c.textMuted,
       fontFamily: "monospace",
       fontSize: "13px",
     }}>
@@ -68,6 +73,7 @@ function TerminalFallback() {
 export function MainView() {
   const [activeTab, setActiveTab] = useState<TabId>("agents");
   const t = useTranslation();
+  const styles = useStyles();
 
   const tabs: { id: TabId; label: string }[] = [
     { id: "agents", label: t("tabs.agents") },

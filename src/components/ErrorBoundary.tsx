@@ -4,6 +4,7 @@ import { zhTW } from "../i18n/locales/zh-TW";
 import { en } from "../i18n/locales/en";
 import { ja } from "../i18n/locales/ja";
 import { reportCrash } from "../tauri-api";
+import { useThemeStore, DARK_THEME, LIGHT_THEME, type ThemeColors } from "../theme";
 
 interface Props {
   children: ReactNode;
@@ -13,55 +14,52 @@ interface State {
   error: Error | null;
 }
 
-const styles = {
-  container: {
-    display: "flex",
-    flexDirection: "column" as const,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    height: "100vh",
-    background: "#1e1e2e",
-    color: "#cdd6f4",
-    fontFamily: "monospace",
-    padding: "24px",
-    gap: "16px",
-  },
-  title: {
-    fontSize: "18px",
-    fontWeight: 700,
-    color: "#f38ba8",
-    margin: 0,
-  },
-  message: {
-    color: "#a6adc8",
-    fontSize: "13px",
-    maxWidth: "600px",
-    textAlign: "center" as const,
-  },
-  stack: {
-    fontSize: "11px",
-    color: "#6c7086",
-    background: "#181825",
-    border: "2px solid #313244",
-    padding: "12px",
-    maxWidth: "760px",
-    maxHeight: "280px",
-    overflow: "auto" as const,
-    whiteSpace: "pre-wrap" as const,
-    wordBreak: "break-word" as const,
-  },
-  button: {
-    padding: "8px 20px",
-    background: "#89b4fa",
-    color: "#1e1e2e",
-    border: "none",
-    borderRadius: 0,
-    cursor: "pointer",
-    fontWeight: 700,
-    fontSize: "13px",
-    fontFamily: "monospace",
-  },
-} as const;
+function makeStyles(c: ThemeColors) {
+  return {
+    container: {
+      display: "flex",
+      flexDirection: "column" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      height: "100vh",
+      background: c.bg,
+      color: c.text,
+      fontFamily: "monospace",
+      padding: "24px",
+      gap: "16px",
+    },
+    title: { fontSize: "18px", fontWeight: 700, color: c.error, margin: 0 },
+    message: {
+      color: c.textDim,
+      fontSize: "13px",
+      maxWidth: "600px",
+      textAlign: "center" as const,
+    },
+    stack: {
+      fontSize: "11px",
+      color: c.textMuted,
+      background: c.bgSurface,
+      border: `2px solid ${c.bgElevated}`,
+      padding: "12px",
+      maxWidth: "760px",
+      maxHeight: "280px",
+      overflow: "auto" as const,
+      whiteSpace: "pre-wrap" as const,
+      wordBreak: "break-word" as const,
+    },
+    button: {
+      padding: "8px 20px",
+      background: c.accent,
+      color: c.bg,
+      border: "none",
+      borderRadius: 0,
+      cursor: "pointer",
+      fontWeight: 700,
+      fontSize: "13px",
+      fontFamily: "monospace",
+    },
+  } as const;
+}
 
 /**
  * 頂層錯誤邊界。任何子元件 render / lifecycle 拋出錯誤時顯示備援 UI，
@@ -95,10 +93,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
   override render(): ReactNode {
     if (this.state.error) {
-      // ErrorBoundary 是 class 元件，無法用 hook。直接讀當前 locale
-      // 對應的字典即可；不對語言切換做響應式更新（錯誤畫面出現頻率極低）。
+      // ErrorBoundary 是 class 元件，無法用 hook。直接讀當前 locale / theme 的
+      // 靜態值即可；不對語言切換做響應式更新（錯誤畫面出現頻率極低）。
       const locale = useLocaleStore.getState().locale;
       const dict = locale === "en" ? en : locale === "ja" ? ja : zhTW;
+      const resolved = useThemeStore.getState().resolved;
+      const styles = makeStyles(resolved === "light" ? LIGHT_THEME : DARK_THEME);
       return (
         <div style={styles.container}>
           <h1 style={styles.title}>{dict.errors.uncaughtTitle}</h1>

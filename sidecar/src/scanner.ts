@@ -5,6 +5,7 @@ import * as fsp from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import type { AgentTracker } from './agentTracker.js';
+import { markAsync } from './perfMark.js';
 
 /** 並行 stat 的上限 — 避免一次打開太多檔案描述符。 */
 const STAT_CONCURRENCY = 16;
@@ -84,6 +85,14 @@ export class Scanner {
 		if (this.scanning) return;
 		this.scanning = true;
 		try {
+			await markAsync('scanner.scan', () => this.scanInner());
+		} finally {
+			this.scanning = false;
+		}
+	}
+
+	private async scanInner(): Promise<void> {
+		{
 			const projectsRoot = path.join(os.homedir(), '.claude', 'projects');
 			let projectDirs: string[];
 			try {
@@ -158,8 +167,6 @@ export class Scanner {
 					}
 				}
 			});
-		} finally {
-			this.scanning = false;
 		}
 	}
 }

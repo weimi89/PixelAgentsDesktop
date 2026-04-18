@@ -1,6 +1,7 @@
 mod commands;
 mod diagnostics;
 mod ipc;
+mod menu;
 mod secret_store;
 mod sidecar;
 mod state;
@@ -73,6 +74,11 @@ pub fn run() {
             // Set up system tray
             if let Err(e) = tray::setup_tray(app) {
                 tracing::error!("Failed to set up system tray: {e}");
+            }
+
+            // Install native menu bar (macOS only)
+            if let Err(e) = menu::install(app) {
+                tracing::error!("Failed to install menu bar: {e}");
             }
 
             // macOS: hide dock icon, behave as a tray-only app

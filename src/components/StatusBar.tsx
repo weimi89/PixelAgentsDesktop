@@ -3,82 +3,80 @@ import { useConnectionStore } from "../stores/connectionStore";
 import { useSystemStore } from "../stores/systemStore";
 import { disconnect } from "../tauri-api";
 import { useTranslation } from "../i18n";
+import { useThemeColors } from "../theme";
 
-const styles = {
-  bar: {
-    display: "flex",
-    alignItems: "center",
-    gap: "16px",
-    padding: "6px 16px",
-    background: "#181825",
-    borderTop: "2px solid #313244",
-    fontSize: "12px",
-    fontFamily: "monospace",
-  },
-  statusGroup: {
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
-  },
-  indicator: (color: string) => ({
-    display: "inline-block",
-    width: "8px",
-    height: "8px",
-    borderRadius: "50%",
-    background: color,
-    flexShrink: 0,
-  }),
-  label: {
-    color: "#6c7086",
-  },
-  value: {
-    color: "#cdd6f4",
-  },
-  serverUrl: {
-    color: "#a6adc8",
-    fontSize: "11px",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap" as const,
-    maxWidth: "200px",
-    cursor: "pointer",
-    background: "transparent",
-    border: "none",
-    padding: 0,
-    fontFamily: "monospace",
-  },
-  version: {
-    color: "#585b70",
-    fontSize: "11px",
-  },
-  spacer: {
-    flex: 1,
-  },
-  error: {
-    color: "#f38ba8",
-    fontSize: "11px",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap" as const,
-    maxWidth: "300px",
-  },
-  disconnectButton: {
-    padding: "2px 10px",
-    background: "transparent",
-    color: "#f38ba8",
-    border: "1px solid #f38ba8",
-    borderRadius: 0,
-    cursor: "pointer",
-    fontSize: "11px",
-    fontFamily: "monospace",
-  },
-} as const;
+function useStyles() {
+  const c = useThemeColors();
+  return {
+    bar: {
+      display: "flex",
+      alignItems: "center",
+      gap: "16px",
+      padding: "6px 16px",
+      background: c.bgSurface,
+      borderTop: `2px solid ${c.bgElevated}`,
+      fontSize: "12px",
+      fontFamily: "monospace",
+    },
+    statusGroup: {
+      display: "flex",
+      alignItems: "center",
+      gap: "6px",
+    },
+    indicator: (color: string) => ({
+      display: "inline-block",
+      width: "8px",
+      height: "8px",
+      borderRadius: "50%",
+      background: color,
+      flexShrink: 0,
+    }),
+    label: { color: c.textMuted },
+    value: { color: c.text },
+    serverUrl: {
+      color: c.textDim,
+      fontSize: "11px",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap" as const,
+      maxWidth: "200px",
+      cursor: "pointer",
+      background: "transparent",
+      border: "none",
+      padding: 0,
+      fontFamily: "monospace",
+    },
+    version: { color: c.textMuted, fontSize: "11px" },
+    spacer: { flex: 1 },
+    error: {
+      color: c.error,
+      fontSize: "11px",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap" as const,
+      maxWidth: "300px",
+    },
+    disconnectButton: {
+      padding: "2px 10px",
+      background: "transparent",
+      color: c.error,
+      border: `1px solid ${c.error}`,
+      borderRadius: 0,
+      cursor: "pointer",
+      fontSize: "11px",
+      fontFamily: "monospace",
+    },
+  } as const;
+}
 
-const STATUS_COLORS: Record<string, string> = {
-  disconnected: "#f38ba8",
-  connecting: "#fab387",
-  connected: "#a6e3a1",
-};
+function useStatusColors() {
+  const c = useThemeColors();
+  return {
+    disconnected: c.error,
+    connecting: c.warning,
+    connected: c.success,
+  } as Record<string, string>;
+}
 
 export function StatusBar() {
   const { status, latency, agentCount, error, serverUrl, reset } =
@@ -86,8 +84,11 @@ export function StatusBar() {
   const sidecarVersion = useSystemStore((s) => s.sidecarVersion);
   const [copied, setCopied] = useState(false);
   const t = useTranslation();
+  const styles = useStyles();
+  const statusColors = useStatusColors();
+  const colors = useThemeColors();
 
-  const indicatorColor = STATUS_COLORS[status] ?? "#6c7086";
+  const indicatorColor = statusColors[status] ?? colors.textMuted;
 
   const handleDisconnect = async () => {
     try {

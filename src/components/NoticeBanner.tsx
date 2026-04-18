@@ -1,12 +1,18 @@
 import { useEffect } from "react";
 import { useSystemStore } from "../stores/systemStore";
 import { useTranslation } from "../i18n";
+import { useThemeColors } from "../theme";
 
-const COLORS = {
-  info: { bg: "#1e2333", border: "#89b4fa", text: "#89b4fa" },
-  warn: { bg: "#2a2416", border: "#fab387", text: "#fab387" },
-  error: { bg: "#2a1820", border: "#f38ba8", text: "#f38ba8" },
-} as const;
+/** 以當前主題色合成三個通知等級的外觀。
+ *  background 用半透明疊在 bgSurface 上讓兩種主題都可讀。 */
+function useNoticeColors() {
+  const c = useThemeColors();
+  return {
+    info: { bg: c.bgSurface, border: c.accent, text: c.accent },
+    warn: { bg: c.bgSurface, border: c.warning, text: c.warning },
+    error: { bg: c.bgSurface, border: c.error, text: c.error },
+  } as const;
+}
 
 const styles = {
   container: (color: { bg: string; border: string; text: string }, fatal: boolean) => ({
@@ -47,6 +53,7 @@ export function NoticeBanner() {
   const notice = useSystemStore((s) => s.notice);
   const clearNotice = useSystemStore((s) => s.clearNotice);
   const t = useTranslation();
+  const COLORS = useNoticeColors();
 
   useEffect(() => {
     if (!notice || notice.fatal) return;

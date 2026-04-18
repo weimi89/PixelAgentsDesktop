@@ -9,13 +9,17 @@ import {
 } from "../stores/logStore";
 import { useAgentStore } from "../stores/agentStore";
 import { useTranslation } from "../i18n";
+import { useThemeColors, type ThemeColors } from "../theme";
 
-const LEVEL_COLORS: Record<LogLevel, string> = {
-  info: "#89b4fa",
-  warn: "#fab387",
-  error: "#f38ba8",
-  debug: "#6c7086",
-};
+function useLevelColors(): Record<LogLevel, string> {
+  const c = useThemeColors();
+  return {
+    info: c.accent,
+    warn: c.warning,
+    error: c.error,
+    debug: c.textMuted,
+  };
+}
 
 function formatTimestamp(ts: number): string {
   const d = new Date(ts);
@@ -26,143 +30,137 @@ function formatTimestamp(ts: number): string {
   return `${hh}:${mm}:${ss}.${ms}`;
 }
 
-const styles = {
-  container: {
-    display: "flex",
-    flexDirection: "column" as const,
-    height: "100%",
-    fontFamily: "monospace",
-    fontSize: "12px",
-    color: "#cdd6f4",
-  },
-  filterBar: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    padding: "8px",
-    background: "#313244",
-    borderBottom: "2px solid #45475a",
-    flexWrap: "wrap" as const,
-    flexShrink: 0,
-  },
-  select: {
-    background: "#1e1e2e",
-    color: "#cdd6f4",
-    border: "2px solid #45475a",
-    borderRadius: 0,
-    padding: "4px 8px",
-    fontFamily: "monospace",
-    fontSize: "12px",
-    cursor: "pointer",
-  },
-  input: {
-    background: "#1e1e2e",
-    color: "#cdd6f4",
-    border: "2px solid #45475a",
-    borderRadius: 0,
-    padding: "4px 8px",
-    fontFamily: "monospace",
-    fontSize: "12px",
-    width: "120px",
-  },
-  button: {
-    background: "#1e1e2e",
-    color: "#cdd6f4",
-    border: "2px solid #45475a",
-    borderRadius: 0,
-    padding: "4px 10px",
-    fontFamily: "monospace",
-    fontSize: "12px",
-    cursor: "pointer",
-  },
-  buttonDanger: {
-    background: "#1e1e2e",
-    color: "#f38ba8",
-    border: "2px solid #f38ba8",
-    borderRadius: 0,
-    padding: "4px 10px",
-    fontFamily: "monospace",
-    fontSize: "12px",
-    cursor: "pointer",
-  },
-  listContainer: {
-    flex: 1,
-    minHeight: 0,
-  },
-  logRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    padding: "2px 8px",
-    height: "24px",
-    lineHeight: "24px",
-    whiteSpace: "nowrap" as const,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    borderBottom: "1px solid #181825",
-  },
-  timestamp: {
-    color: "#6c7086",
-    flexShrink: 0,
-  },
-  badge: (level: LogLevel) => ({
-    display: "inline-block",
-    padding: "0 6px",
-    color: "#1e1e2e",
-    background: LEVEL_COLORS[level],
-    fontWeight: 700,
-    fontSize: "10px",
-    textTransform: "uppercase" as const,
-    flexShrink: 0,
-    minWidth: "40px",
-    textAlign: "center" as const,
-  }),
-  source: {
-    color: "#a6adc8",
-    flexShrink: 0,
-    maxWidth: "120px",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-  message: {
-    color: "#cdd6f4",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    flex: 1,
-  },
-  scrollButton: {
-    position: "absolute" as const,
-    bottom: "12px",
-    right: "20px",
-    background: "#313244",
-    color: "#89b4fa",
-    border: "2px solid #89b4fa",
-    borderRadius: 0,
-    padding: "4px 12px",
-    fontFamily: "monospace",
-    fontSize: "11px",
-    cursor: "pointer",
-    zIndex: 10,
-  },
-  empty: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    height: "100%",
-    color: "#6c7086",
-    fontSize: "13px",
-    fontFamily: "monospace",
-  },
-  filterLabel: {
-    color: "#6c7086",
-    fontSize: "11px",
-  },
-  spacer: {
-    flex: 1,
-  },
-} as const;
+function makeStyles(c: ThemeColors, levelColors: Record<LogLevel, string>) {
+  return {
+    container: {
+      display: "flex",
+      flexDirection: "column" as const,
+      height: "100%",
+      fontFamily: "monospace",
+      fontSize: "12px",
+      color: c.text,
+    },
+    filterBar: {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      padding: "8px",
+      background: c.bgElevated,
+      borderBottom: `2px solid ${c.border}`,
+      flexWrap: "wrap" as const,
+      flexShrink: 0,
+    },
+    select: {
+      background: c.bg,
+      color: c.text,
+      border: `2px solid ${c.border}`,
+      borderRadius: 0,
+      padding: "4px 8px",
+      fontFamily: "monospace",
+      fontSize: "12px",
+      cursor: "pointer",
+    },
+    input: {
+      background: c.bg,
+      color: c.text,
+      border: `2px solid ${c.border}`,
+      borderRadius: 0,
+      padding: "4px 8px",
+      fontFamily: "monospace",
+      fontSize: "12px",
+      width: "120px",
+    },
+    button: {
+      background: c.bg,
+      color: c.text,
+      border: `2px solid ${c.border}`,
+      borderRadius: 0,
+      padding: "4px 10px",
+      fontFamily: "monospace",
+      fontSize: "12px",
+      cursor: "pointer",
+    },
+    buttonDanger: {
+      background: c.bg,
+      color: c.error,
+      border: `2px solid ${c.error}`,
+      borderRadius: 0,
+      padding: "4px 10px",
+      fontFamily: "monospace",
+      fontSize: "12px",
+      cursor: "pointer",
+    },
+    listContainer: { flex: 1, minHeight: 0 },
+    logRow: {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      padding: "2px 8px",
+      height: "24px",
+      lineHeight: "24px",
+      whiteSpace: "nowrap" as const,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      borderBottom: `1px solid ${c.bgSurface}`,
+    },
+    timestamp: { color: c.textMuted, flexShrink: 0 },
+    badge: (level: LogLevel) => ({
+      display: "inline-block",
+      padding: "0 6px",
+      color: c.bg,
+      background: levelColors[level],
+      fontWeight: 700,
+      fontSize: "10px",
+      textTransform: "uppercase" as const,
+      flexShrink: 0,
+      minWidth: "40px",
+      textAlign: "center" as const,
+    }),
+    source: {
+      color: c.textDim,
+      flexShrink: 0,
+      maxWidth: "120px",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+    },
+    message: {
+      color: c.text,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      flex: 1,
+    },
+    scrollButton: {
+      position: "absolute" as const,
+      bottom: "12px",
+      right: "20px",
+      background: c.bgElevated,
+      color: c.accent,
+      border: `2px solid ${c.accent}`,
+      borderRadius: 0,
+      padding: "4px 12px",
+      fontFamily: "monospace",
+      fontSize: "11px",
+      cursor: "pointer",
+      zIndex: 10,
+    },
+    empty: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "100%",
+      color: c.textMuted,
+      fontSize: "13px",
+      fontFamily: "monospace",
+    },
+    filterLabel: { color: c.textMuted, fontSize: "11px" },
+    spacer: { flex: 1 },
+  } as const;
+}
 
 function LogRow({ entry }: { entry: LogEntry }) {
+  const c = useThemeColors();
+  const levelColors = useLevelColors();
+  const styles = makeStyles(c, levelColors);
   return (
     <div style={styles.logRow}>
       <span style={styles.timestamp}>{formatTimestamp(entry.timestamp)}</span>
@@ -175,6 +173,9 @@ function LogRow({ entry }: { entry: LogEntry }) {
 
 export function LogViewer() {
   const t = useTranslation();
+  const c = useThemeColors();
+  const levelColors = useLevelColors();
+  const styles = makeStyles(c, levelColors);
   const [levelFilter, setLevelFilter] = useState<LogLevel | "">("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [agentFilter, setAgentFilter] = useState("");

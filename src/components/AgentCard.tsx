@@ -2,6 +2,7 @@ import { memo, useState } from "react";
 import { useAgentStore, type ToolInfo } from "../stores/agentStore";
 import { useTick } from "../hooks/useTick";
 import { useTranslation } from "../i18n";
+import { useThemeColors, type ThemeColors } from "../theme";
 
 const TOOL_COLORS: Record<string, string> = {
   // File operations — blue
@@ -26,16 +27,14 @@ const TOOL_COLORS: Record<string, string> = {
   TodoWrite: "#f9e2af",
 };
 
-function getToolColor(toolName: string): string {
-  // Direct match
+function getToolColor(toolName: string, fallback: string): string {
+  // Direct match — TOOL_COLORS 為固定色系（跨主題一致）
   const direct = TOOL_COLORS[toolName];
   if (direct) return direct;
-  // MCP tools
   if (toolName.startsWith("mcp_") || toolName.startsWith("mcp__")) {
-    return TOOL_COLORS.mcp ?? "#a6adc8";
+    return TOOL_COLORS.mcp ?? fallback;
   }
-  // Fallback
-  return "#a6adc8";
+  return fallback;
 }
 
 function formatElapsed(startedAt: number): string {
@@ -64,7 +63,8 @@ function truncateSessionId(sessionId: string): string {
 }
 
 function ToolBadge({ tool }: { tool: ToolInfo }) {
-  const color = getToolColor(tool.toolName);
+  const c = useThemeColors();
+  const color = getToolColor(tool.toolName, c.textDim);
   // 訂閱共用 tick — 所有 Badge 同步每秒重新渲染，不各自建立 setInterval
   useTick();
 
@@ -89,59 +89,63 @@ function ToolBadge({ tool }: { tool: ToolInfo }) {
   );
 }
 
-const styles = {
-  card: (hovered: boolean) => ({
-    padding: "12px 16px",
-    background: "#313244",
-    border: `2px solid ${hovered ? "#89b4fa" : "#45475a"}`,
-    borderRadius: 0,
-    display: "flex" as const,
-    flexDirection: "column" as const,
-    gap: "8px",
-    cursor: "default",
-    transition: "border-color 0.15s",
-  }),
-  header: {
-    display: "flex" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-  },
-  projectName: {
-    fontSize: "14px",
-    fontWeight: 700,
-    color: "#cdd6f4",
-    fontFamily: "monospace",
-  },
-  statusDot: (status: string) => ({
-    width: "8px",
-    height: "8px",
-    borderRadius: 0,
-    background: status === "active" ? "#a6e3a1" : "#6c7086",
-    border: `1px solid ${status === "active" ? "#a6e3a1" : "#585b70"}`,
-    flexShrink: 0,
-  }),
-  sessionId: {
-    fontSize: "10px",
-    color: "#6c7086",
-    fontFamily: "monospace",
-  },
-  toolsRow: {
-    display: "flex" as const,
-    flexWrap: "wrap" as const,
-    gap: "4px",
-  },
-  footer: {
-    fontSize: "10px",
-    color: "#585b70",
-    fontFamily: "monospace",
-  },
-} as const;
+function makeStyles(c: ThemeColors) {
+  return {
+    card: (hovered: boolean) => ({
+      padding: "12px 16px",
+      background: c.bgElevated,
+      border: `2px solid ${hovered ? c.accent : c.border}`,
+      borderRadius: 0,
+      display: "flex" as const,
+      flexDirection: "column" as const,
+      gap: "8px",
+      cursor: "default",
+      transition: "border-color 0.15s",
+    }),
+    header: {
+      display: "flex" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+    },
+    projectName: {
+      fontSize: "14px",
+      fontWeight: 700,
+      color: c.text,
+      fontFamily: "monospace",
+    },
+    statusDot: (status: string) => ({
+      width: "8px",
+      height: "8px",
+      borderRadius: 0,
+      background: status === "active" ? c.success : c.textMuted,
+      border: `1px solid ${status === "active" ? c.success : c.borderLight}`,
+      flexShrink: 0,
+    }),
+    sessionId: {
+      fontSize: "10px",
+      color: c.textMuted,
+      fontFamily: "monospace",
+    },
+    toolsRow: {
+      display: "flex" as const,
+      flexWrap: "wrap" as const,
+      gap: "4px",
+    },
+    footer: {
+      fontSize: "10px",
+      color: c.textMuted,
+      fontFamily: "monospace",
+    },
+  } as const;
+}
 
 function AgentCardInner({ sessionId }: { sessionId: string }) {
   // 以 sessionId 訂閱單一 agent — 只有該 agent 變更時本 card 才重渲染
   const agent = useAgentStore((s) => s.agents.get(sessionId));
   const [hovered, setHovered] = useState(false);
   const t = useTranslation();
+  const c = useThemeColors();
+  const styles = makeStyles(c);
   const formatTimeSince = useFormatTimeSince();
   // 訂閱共用 tick 讓「最後活動: N 秒前」能每秒刷新
   useTick();
