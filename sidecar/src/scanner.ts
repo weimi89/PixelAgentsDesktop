@@ -53,6 +53,8 @@ export class Scanner {
 	private scanTimer: ReturnType<typeof setInterval> | null = null;
 	/** 防止掃描重入 — 前次 scan 未完成時跳過新一次 tick */
 	private scanning = false;
+	/** 進行中的掃描 Promise；重入時回傳它，讓 forceScan 的 await 能等到實際完成。 */
+	private currentScan: Promise<void> | null = null;
 	/** sessionId → 最後更新時間 */
 	private lastActivity = new Map<string, number>();
 	/** 伺服器同步的排除專案清單（目錄 basename） */
@@ -109,18 +111,24 @@ export class Scanner {
 	 *
 	 * 內建 scanning 重入保護會跳過若當前已有 scan 在進行中。
 	 */
-	forceScan(): void {
-		void this.scan();
+	forceScan(): Promise<void> {
+		return this.scan();
 	}
 
-	private async scan(): Promise<void> {
-		if (this.scanning) return;
+	private scan(): Promise<void> {
+		// 已有掃描進行中 —— 回傳當前掃描的 Promise，讓 forceScan 的 await 能等到
+		// 實際完成，而非立即 resolve（重入保護仍避免同時跑兩次 scanInner）。
+		if (this.scanning) return this.currentScan ?? Promise.resolve();
 		this.scanning = true;
-		try {
-			await markAsync('scanner.scan', () => this.scanInner());
-		} finally {
-			this.scanning = false;
-		}
+		this.currentScan = (async () => {
+			try {
+				await markAsync('scanner.scan', () => this.scanInner());
+			} finally {
+				this.scanning = false;
+				this.currentScan = null;
+			}
+		})();
+		return this.currentScan;
 	}
 
 	private async scanInner(): Promise<void> {

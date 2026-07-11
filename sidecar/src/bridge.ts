@@ -145,7 +145,7 @@ export class Bridge {
 				console.log('[Bridge] Reconnected — forcing immediate re-scan');
 				// 重連後立即掃描一次，加速 session 重新註冊到伺服器；
 				// 不等下一個 scan tick（可能長達數秒）
-				this.scanner?.forceScan();
+				void this.scanner?.forceScan();
 				this._onEvent({
 					event: 'connectionStatus',
 					data: { connected: true, status: 'connected' },
@@ -173,7 +173,9 @@ export class Bridge {
 		// 接入 resume session — 伺服器可在重新連線時要求恢復某個 session 追蹤
 		this.connection.setResumeHandler({
 			onResumeSession: (sessionId, projectDir) => {
-				this.resumeSession(sessionId, projectDir);
+				void this.resumeSession(sessionId, projectDir).catch((err) => {
+					console.error('[Bridge] resumeSession failed:', err);
+				});
 			},
 		});
 
@@ -192,7 +194,7 @@ export class Bridge {
 	 * 對應檔案；若存在，委派 scanner.forceScan 讓 tracker 重新接管；成功
 	 * 與否都回報 `sessionResumed` 事件給伺服器。
 	 */
-	private resumeSession(sessionId: string, projectDir: string): void {
+	private async resumeSession(sessionId: string, projectDir: string): Promise<void> {
 		if (!this.tracker || !this.scanner || !this.connection) return;
 
 		// 若 tracker 已經追蹤此 session 則視為成功
@@ -205,19 +207,17 @@ export class Bridge {
 			return;
 		}
 
-		// 否則觸發一次 immediate scan，scanner 會自動撿起活躍 session
-		this.scanner.forceScan();
-		// forceScan 是 fire-and-forget，無法同步知道是否成功；這裡給一個小
-		// 延遲讓 scanner 跑完再查詢結果
-		setTimeout(() => {
-			const ok = this.tracker?.getTrackedSessions().has(sessionId) ?? false;
-			this.connection?.sendEvent({
-				type: 'sessionResumed',
-				sessionId,
-				success: ok,
-				...(ok ? {} : { error: `session not found in project ${projectDir}` }),
-			});
-		}, 1500);
+		// 否則觸發一次 immediate scan 並等它實際完成再判斷結果 —— 取代舊的固定
+		// 1500ms 延遲（在慢磁碟/多專案下 scan 可能 >1.5s 而誤報失敗，快機器又白等）。
+		await this.scanner.forceScan();
+		// await 期間可能被 disconnect() 清掉，故以 optional chaining 防禦
+		const ok = this.tracker?.getTrackedSessions().has(sessionId) ?? false;
+		this.connection?.sendEvent({
+			type: 'sessionResumed',
+			sessionId,
+			success: ok,
+			...(ok ? {} : { error: `session not found in project ${projectDir}` }),
+		});
 	}
 
 	/**

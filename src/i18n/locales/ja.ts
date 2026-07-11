@@ -110,6 +110,7 @@ export const ja: Dictionary = {
     importSettings: "設定をインポート",
     importOk: "設定を正常にインポートしました",
     importFailed: "インポート失敗: {message}",
+    importInvalid: "インポート失敗: 有効な設定ファイルではありません",
     about: "このアプリについて",
     version: "バージョン",
     update: "アップデート",

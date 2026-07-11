@@ -98,4 +98,40 @@ describe("parseJsonlLine", () => {
     const events = parseJsonlLine(SESSION, line);
     expect(events.some((e) => e.type === "turnComplete")).toBe(true);
   });
+
+  it("assistant 訊息發出 statusChange idle（恢復活動時清除卡住的 waiting/permission）", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: {
+        model: "claude",
+        content: [{ type: "text" }],
+      },
+    });
+    const events = parseJsonlLine(SESSION, line);
+    expect(
+      events.some((e) => e.type === "statusChange" && e.status === "idle"),
+    ).toBe(true);
+  });
+
+  it("progress permission_request 發出 permission 且不 fall through 到子代理工具", () => {
+    const line = JSON.stringify({
+      type: "progress",
+      parentToolUseID: "parent-1",
+      data: {
+        type: "permission_request",
+        // 即使 record 也帶 message（含 tool_use），也不應誤發 subtaskStart
+        message: {
+          type: "assistant",
+          message: {
+            content: [{ type: "tool_use", id: "sub-1", name: "Bash" }],
+          },
+        },
+      },
+    });
+    const events = parseJsonlLine(SESSION, line);
+    expect(
+      events.some((e) => e.type === "statusChange" && e.status === "permission"),
+    ).toBe(true);
+    expect(events.some((e) => e.type === "subtaskStart")).toBe(false);
+  });
 });

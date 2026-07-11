@@ -354,7 +354,22 @@ function App() {
       .then((status) => {
         if (status.connected) {
           useConnectionStore.getState().setStatus("connected");
-          if (typeof status.agentCount === "number") {
+          // sidecar 執行中時 get_status 回傳 { connected, agents:[...] }，**沒有**
+          // agentCount 欄位（agentCount 只出現在 sidecar 已停止的回應）。用 agents
+          // 陣列立即重建列表，避免 reload 後顯示「已連線但 0 個代理」直到下一個事件到達。
+          if (Array.isArray(status.agents)) {
+            const { addAgent } = useAgentStore.getState();
+            for (const a of status.agents) {
+              addAgent(a.sessionId, {
+                sessionId: a.sessionId,
+                projectName: a.projectName,
+                tools: [],
+                status: "idle",
+                lastActivity: Date.now(),
+              });
+            }
+            useConnectionStore.getState().setAgentCount(status.agents.length);
+          } else if (typeof status.agentCount === "number") {
             useConnectionStore.getState().setAgentCount(status.agentCount);
           }
         }

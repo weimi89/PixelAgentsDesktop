@@ -31,7 +31,15 @@ if (!version || !/^\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(version)) {
   process.exit(1);
 }
 
-const today = new Date().toISOString().slice(0, 10);
+// 使用本地時區的日曆日，避免 toISOString()（UTC）在非 UTC 時區把發佈日期
+// 標成前一天（例如 UTC+8 維護者早上執行時會退到昨天）。
+const today = (() => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+})();
 
 async function replace(file, patterns) {
   const path = join(ROOT, file);
@@ -105,11 +113,20 @@ await replace("src-tauri/src/sidecar.rs", [
       unreleasedHeader,
       `## [Unreleased]\n\n### 新增\n\n### 改進\n\n### 修復\n\n## [${version}] — ${today}`,
     );
-    // compare link 更新
-    changelog = changelog.replace(
-      /\[Unreleased\]:\s*(\S+)compare\/v[^.]+\.\.\.HEAD/,
-      `[Unreleased]: $1compare/v${version}...HEAD\n[${version}]: $1compare/v0.1.0...v${version}`,
-    );
+    // compare link 更新：舊 regex 的 `v[^.]+` 無法跨越 semver 中的點（例如
+    // v0.1.0），對真實 tag 永遠比不中而靜默 no-op。改為完整 semver 並捕獲
+    // 上一版號當作新版本 compare 的基準（而非硬編 v0.1.0）；比不中時明確
+    // 告警而非靜默跳過。
+    const compareRe = /\[Unreleased\]:\s*(\S+?)compare\/v(\d+\.\d+\.\d+(?:-[\w.]+)?)\.\.\.HEAD/;
+    if (compareRe.test(changelog)) {
+      changelog = changelog.replace(
+        compareRe,
+        (_m, base, prev) =>
+          `[Unreleased]: ${base}compare/v${version}...HEAD\n[${version}]: ${base}compare/v${prev}...v${version}`,
+      );
+    } else {
+      console.warn("! CHANGELOG.md: 找不到 [Unreleased] compare link，跳過連結更新");
+    }
     await fs.writeFile(path, changelog);
     console.log(`✓ updated CHANGELOG.md`);
   }

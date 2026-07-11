@@ -10,7 +10,7 @@ Pixel Agents Desktop 是一個 Tauri 2.x 桌面應用，監控本機的 Claude C
 
 ```bash
 # 完整應用（Tauri + Vite + Rust）— 主要開發指令
-npm run dev          # 執行 `tauri dev`，啟動 Vite 開發伺服器 :1420 + Rust 後端
+npm run dev          # 執行 `tauri dev`，啟動 Vite 開發伺服器 :11421 + Rust 後端
 
 # 建置正式版
 npm run build        # 執行 `tauri build`

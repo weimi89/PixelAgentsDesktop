@@ -220,3 +220,35 @@ export function parseDesktopSettings(raw: unknown): DesktopSettingsShape {
 
   return out;
 }
+
+/**
+ * 匯入設定專用的**嚴格**驗證。
+ *
+ * 與 [[parseDesktopSettings]]（寬鬆回退）的差異：parseDesktopSettings 對任何
+ * 缺欄位／型別錯誤都靜默回退到預設值，這適合讀取自家寫入的設定檔；但
+ * **不適合使用者手動選擇的匯入檔** —— 選錯檔（空物件 `{}`、陣列、其他 App
+ * 的 JSON）會被靜默整份重設為預設值，卻回報「匯入成功」，造成設定無聲遺失。
+ *
+ * 本函式要求 `raw` 為物件且所有已知欄位都存在且型別正確，否則回報失敗（附上
+ * 有問題的欄位），讓 UI 能明確拒絕無效檔而非誤報成功。數值範圍夾限仍交由
+ * parseDesktopSettings 統一處理。
+ */
+export function validateSettingsImport(
+  raw: unknown,
+): { ok: true; value: DesktopSettingsShape } | { ok: false; invalidFields: string[] } {
+  if (!isObject(raw)) return { ok: false, invalidFields: ["<root>"] };
+
+  const invalidFields: string[] = [];
+  if (!isNumber(raw.scanIntervalMs)) invalidFields.push("scanIntervalMs");
+  if (!Array.isArray(raw.excludedProjects) || !raw.excludedProjects.every((x) => isString(x))) {
+    invalidFields.push("excludedProjects");
+  }
+  if (typeof raw.autoStart !== "boolean") invalidFields.push("autoStart");
+  if (typeof raw.startMinimized !== "boolean") invalidFields.push("startMinimized");
+  if (typeof raw.telemetryEnabled !== "boolean") invalidFields.push("telemetryEnabled");
+
+  if (invalidFields.length > 0) return { ok: false, invalidFields };
+
+  // 型別皆正確 —— 交給 parseDesktopSettings 做範圍夾限與正規化
+  return { ok: true, value: parseDesktopSettings(raw) };
+}

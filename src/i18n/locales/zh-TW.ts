@@ -110,6 +110,7 @@ export const zhTW = {
     importSettings: "匯入設定",
     importOk: "已成功匯入設定",
     importFailed: "匯入失敗：{message}",
+    importInvalid: "匯入失敗：檔案不是有效的設定檔",
     about: "關於",
     version: "版本",
     update: "更新",

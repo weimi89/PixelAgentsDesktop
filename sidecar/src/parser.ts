@@ -40,6 +40,11 @@ export function parseJsonlLine(sessionId: string, line: string): AgentNodeEvent[
 		const record = JSON.parse(line);
 
 		if (record.type === 'assistant' && Array.isArray(record.message?.content)) {
+			// 主 agent 產出新的 assistant record，代表已從「等待輸入 / 請求權限」
+			// 恢復為主動工作 —— 發 idle 清除先前的 waiting/permission 指示，否則
+			// claudeStatus 會永久停在 waiting/permission（授權後也不會復原）。
+			events.push({ type: 'statusChange', sessionId, status: 'idle' });
+
 			const model = record.message?.model as string | undefined;
 			if (model) {
 				events.push({ type: 'modelDetected', sessionId, model });
@@ -93,6 +98,10 @@ export function parseJsonlLine(sessionId: string, line: string): AgentNodeEvent[
 			}
 			if (dataType === 'permission_request') {
 				events.push({ type: 'statusChange', sessionId, status: 'permission' });
+				// 與 waiting_for_task / subtask_cleared 兩個 sibling 分支一致提早返回；
+				// 否則若 permission_request record 也帶 data.message 會 fall through
+				// 到下方子代理工具處理，誤發 subtaskStart/subtaskDone。
+				return events;
 			}
 
 			// 子代理工具

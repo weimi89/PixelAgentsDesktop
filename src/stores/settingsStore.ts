@@ -78,6 +78,9 @@ interface SettingsState extends DesktopSettings {
   setTelemetryEnabled: (enabled: boolean) => void;
   loadSettings: () => Promise<void>;
   saveSettings: () => Promise<void>;
+  /** 匯入完整設定：單次套用所有欄位、單次寫盤，並同步需要下推 sidecar 的
+   *  欄位（掃描間隔、排除清單）。取代逐欄 setter 造成的多次 debounced 寫入。 */
+  importSettings: (settings: DesktopSettings) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -139,6 +142,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   saveSettings: async () => {
     await persistSettings(snapshotFromState(get()));
+  },
+
+  importSettings: async (settings: DesktopSettings) => {
+    // 一次套用全部欄位（單次 set → 單次 UI 更新）
+    set({ ...settings });
+    // 立即完整寫盤，取代逐欄 setter 各自排一次 debounced 寫入造成的重複 I/O
+    await persistSettings(settings);
+    // 下推需要 sidecar 立即生效的欄位；sidecar 未執行時 invoke 會 reject，
+    // 吞掉即可（與 scheduleScanIntervalPush / scheduleExcludedPush 一致）
+    void invoke("update_scan_interval", { intervalMs: settings.scanIntervalMs }).catch(() => {});
+    void invoke("update_excluded_projects", { projects: settings.excludedProjects }).catch(() => {});
   },
 }));
 

@@ -110,6 +110,7 @@ export const en: Dictionary = {
     importSettings: "Import settings",
     importOk: "Settings imported successfully",
     importFailed: "Import failed: {message}",
+    importInvalid: "Import failed: not a valid settings file",
     about: "About",
     version: "Version",
     update: "Update",

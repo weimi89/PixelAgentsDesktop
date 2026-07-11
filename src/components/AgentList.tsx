@@ -16,9 +16,9 @@
  * 點擊 AgentCard 會開啟 [[AgentDetailsDrawer]] 顯示該 agent 完整資訊。
  */
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useAgentStore } from "../stores/agentStore";
+import { useAgentStore, type AgentInfo } from "../stores/agentStore";
 import { AgentCard } from "./AgentCard";
 import { AgentDetailsDrawer } from "./AgentDetailsDrawer";
 import { useTranslation } from "../i18n";
@@ -105,13 +105,19 @@ export function AgentList() {
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 
-  // 訂閱完整 agents Map 以便在過濾時存取 projectName / lastActivity；
-  // 單一 agent 內部更新仍只讓自己的 card 重渲染（AgentCard 獨立 selector）
-  const agents = useAgentStore((s) => s.agents);
+  // 只訂閱 sessionId 陣列（shallow 比較）——單一 agent 的工具/狀態/活動更新
+  // 不會替換此陣列，因此不觸發列表重渲染，符合本模組開頭的效能承諾。過濾/
+  // 排序所需的 projectName / lastActivity 於重算時以 getState() 讀當下快照。
+  const sessionIds = useAgentStore(
+    useShallow((s) => Array.from(s.agents.keys())),
+  );
 
   const filteredSortedIds = useMemo(() => {
+    const store = useAgentStore.getState().agents;
     const q = query.trim().toLowerCase();
-    const entries = Array.from(agents.values());
+    const entries = sessionIds
+      .map((id) => store.get(id))
+      .filter((a): a is AgentInfo => !!a);
     const filtered = q
       ? entries.filter(
           (a) =>
@@ -124,14 +130,13 @@ export function AgentList() {
       return a.projectName.localeCompare(b.projectName);
     });
     return sorted.map((a) => a.sessionId);
-  }, [agents, query, sortMode]);
+  }, [sessionIds, query, sortMode]);
 
-  // 用 shallow 比較 id 陣列避免每次 render 產生新陣列觸發 AgentCard 重渲染
-  const stableIds = useAgentStore(
-    useShallow(() => filteredSortedIds),
-  );
+  // 傳給 drawer 的 onClose 用穩定參考，避免每次 render 產生新箭頭，導致
+  // drawer 內依賴 onClose 的 effect 反覆重跑（焦點被搶回、listener 重綁）。
+  const handleCloseDrawer = useCallback(() => setSelectedSessionId(null), []);
 
-  if (agents.size === 0) {
+  if (sessionIds.length === 0) {
     return (
       <div style={styles.empty}>
         <div style={styles.emptyIcon}>[  ]</div>
@@ -167,11 +172,11 @@ export function AgentList() {
         </select>
       </div>
 
-      {stableIds.length === 0 ? (
+      {filteredSortedIds.length === 0 ? (
         <div style={styles.emptyText}>{t("agents.noMatch")}</div>
       ) : (
         <div style={styles.list}>
-          {stableIds.map((sessionId) => (
+          {filteredSortedIds.map((sessionId) => (
             <AgentCard
               key={sessionId}
               sessionId={sessionId}
@@ -184,7 +189,7 @@ export function AgentList() {
       {selectedSessionId && (
         <AgentDetailsDrawer
           sessionId={selectedSessionId}
-          onClose={() => setSelectedSessionId(null)}
+          onClose={handleCloseDrawer}
         />
       )}
     </div>

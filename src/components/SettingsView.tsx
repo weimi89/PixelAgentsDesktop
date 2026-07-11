@@ -23,11 +23,10 @@ import {
   getDiagnostics,
   listCrashes,
   clearCrashes,
-  saveSettings,
   type DiagnosticsSnapshot,
   type CrashListing,
 } from "../tauri-api";
-import { parseDesktopSettings } from "../lib/validators";
+import { validateSettingsImport } from "../lib/validators";
 import { invoke } from "@tauri-apps/api/core";
 import { useLocaleStore, useTranslation, type LocaleCode } from "../i18n";
 import { checkForUpdate, type UpdateCheckResult } from "../lib/updater";
@@ -224,6 +223,7 @@ export function SettingsView() {
     setStartMinimized,
     setTelemetryEnabled,
     loadSettings,
+    importSettings,
   } = useSettingsStore(
     useShallow((s) => ({
       scanIntervalMs: s.scanIntervalMs,
@@ -238,6 +238,7 @@ export function SettingsView() {
       setStartMinimized: s.setStartMinimized,
       setTelemetryEnabled: s.setTelemetryEnabled,
       loadSettings: s.loadSettings,
+      importSettings: s.importSettings,
     })),
   );
   const setAutoStart = useSettingsStore((s) => s.setAutoStart);
@@ -322,21 +323,35 @@ export function SettingsView() {
     URL.revokeObjectURL(url);
   };
 
+  // 將 autoStart 實際套用到 OS autostart plugin（enable/disable）並同步本地
+  // UI 旗標。匯入設定與手動切換共用，避免只改 store 旗標卻沒真的向 OS
+  // 註冊/解除開機啟動。
+  const applyAutoStartToOs = async (enabled: boolean) => {
+    await invoke(enabled ? "plugin:autostart|enable" : "plugin:autostart|disable");
+    setAutoStartEnabled(enabled);
+  };
+
   const handleImportSettings = async (file: File) => {
     try {
       const text = await file.text();
       const raw: unknown = JSON.parse(text);
-      const parsed = parseDesktopSettings(raw);
-      // parseDesktopSettings 保證型別正確；個別欄位透過 setter 應用
-      setScanInterval(parsed.scanIntervalMs);
-      // excludedProjects 以 removeAll + addAll 的方式同步，避免 setter 介面缺失
-      for (const p of excludedProjects) removeExcludedProject(p);
-      for (const p of parsed.excludedProjects) addExcludedProject(p);
-      setAutoStart(parsed.autoStart);
-      setStartMinimized(parsed.startMinimized);
-      setTelemetryEnabled(parsed.telemetryEnabled);
-      // 完整快照立即寫盤，不依賴 debounce
-      await saveSettings(parsed);
+      const result = validateSettingsImport(raw);
+      if (!result.ok) {
+        // 合法 JSON 但不是有效設定檔（選錯檔／欄位缺漏或型別錯誤）——
+        // 明確拒絕，而非靜默把設定重設為預設值後誤報「匯入成功」
+        console.warn("[settings] 匯入檔欄位無效：", result.invalidFields);
+        setImportMessage({ ok: false, text: t("settings.importInvalid") });
+        return;
+      }
+      const parsed = result.value;
+      // 單次套用全部欄位 + 單次寫盤 + 下推 sidecar（掃描間隔／排除清單）
+      await importSettings(parsed);
+      // autoStart 需實際同步到 OS plugin，而非只設 store 旗標
+      try {
+        await applyAutoStartToOs(parsed.autoStart);
+      } catch (err) {
+        console.error("Failed to sync autostart on import:", err);
+      }
       setImportMessage({ ok: true, text: t("settings.importOk") });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -398,12 +413,7 @@ export function SettingsView() {
 
   const handleAutoStartToggle = async (enabled: boolean) => {
     try {
-      if (enabled) {
-        await invoke("plugin:autostart|enable");
-      } else {
-        await invoke("plugin:autostart|disable");
-      }
-      setAutoStartEnabled(enabled);
+      await applyAutoStartToOs(enabled);
       setAutoStart(enabled);
     } catch (err) {
       console.error("Failed to toggle autostart:", err);

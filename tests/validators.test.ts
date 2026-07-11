@@ -6,6 +6,7 @@ import {
   isConnectionStatusPayload,
   isLatencyPayload,
   isErrorPayload,
+  validateSettingsImport,
 } from "../src/lib/validators";
 
 describe("validators", () => {
@@ -56,5 +57,59 @@ describe("validators", () => {
     expect(isErrorPayload({ message: "boom" })).toBe(true);
     expect(isErrorPayload({ message: null })).toBe(false);
     expect(isErrorPayload({})).toBe(false);
+  });
+
+  describe("validateSettingsImport（匯入嚴格驗證）", () => {
+    const valid = {
+      scanIntervalMs: 2000,
+      excludedProjects: ["foo", "bar"],
+      autoStart: true,
+      startMinimized: false,
+      telemetryEnabled: false,
+    };
+
+    it("接受完整且型別正確的設定檔並回傳正規化值", () => {
+      const r = validateSettingsImport(valid);
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        expect(r.value.scanIntervalMs).toBe(2000);
+        expect(r.value.excludedProjects).toEqual(["foo", "bar"]);
+        expect(r.value.autoStart).toBe(true);
+      }
+    });
+
+    it("拒絕非物件（null / 陣列 / 字串）", () => {
+      expect(validateSettingsImport(null).ok).toBe(false);
+      expect(validateSettingsImport([]).ok).toBe(false);
+      expect(validateSettingsImport("x").ok).toBe(false);
+    });
+
+    it("拒絕空物件並列出缺少的欄位（不靜默回退預設）", () => {
+      const r = validateSettingsImport({});
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.invalidFields).toContain("scanIntervalMs");
+        expect(r.invalidFields).toContain("autoStart");
+        expect(r.invalidFields).toContain("telemetryEnabled");
+      }
+    });
+
+    it("拒絕欄位型別錯誤（例如 autoStart 為字串）", () => {
+      const r = validateSettingsImport({ ...valid, autoStart: "yes" });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.invalidFields).toEqual(["autoStart"]);
+    });
+
+    it("拒絕 excludedProjects 含非字串元素", () => {
+      const r = validateSettingsImport({ ...valid, excludedProjects: ["ok", 123] });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.invalidFields).toContain("excludedProjects");
+    });
+
+    it("型別正確但數值超範圍時仍接受，並由 parseDesktopSettings 夾限為預設", () => {
+      const r = validateSettingsImport({ ...valid, scanIntervalMs: 999999999 });
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.value.scanIntervalMs).toBe(1000);
+    });
   });
 });

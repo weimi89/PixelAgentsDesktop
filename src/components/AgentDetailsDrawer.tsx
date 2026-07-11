@@ -33,23 +33,62 @@ export function AgentDetailsDrawer({ sessionId, onClose }: Props) {
   const t = useTranslation();
   const c = useThemeColors();
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   useTick(); // 讓「最後活動 N 秒前」與工具經過時間自動刷新
 
-  // ESC 關閉 + 初始焦點到關閉按鈕
+  // agent 在開啟 drawer 後被移除時收掉 drawer。改用 effect 而非在 render
+  // 期間直接呼叫 onClose（父層 setState）—— 後者違反 React「render 期間不得
+  // 更新其他元件」規則，會觸發警告與可能的多餘 render / 閃爍。
+  useEffect(() => {
+    if (!agent) onClose();
+  }, [agent, onClose]);
+
+  // 初始焦點移到關閉按鈕；卸載時把焦點還原到開啟前的元素（WAI-ARIA dialog
+  // focus restoration）。刻意只在 mount/unmount 各跑一次，避免父層每次 render
+  // 產生新的 onClose 參考而讓焦點被反覆搶回關閉按鈕。
+  useEffect(() => {
+    const prevFocused = document.activeElement as HTMLElement | null;
+    closeBtnRef.current?.focus();
+    return () => prevFocused?.focus?.();
+  }, []);
+
+  // ESC 關閉
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    closeBtnRef.current?.focus();
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  if (!agent) {
-    // 如果 agent 在開啟 drawer 後被移除，直接收掉 drawer 避免留白
-    onClose();
-    return null;
-  }
+  // Focus trap — Tab / Shift+Tab 在對話框內循環，不讓焦點跑到被遮蔽的背景
+  // 內容，符合 role="dialog" + aria-modal="true" 應有的行為。
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const focusables = panel.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (!first || !last) return;
+      const active = document.activeElement;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    panel.addEventListener("keydown", onKeyDown);
+    return () => panel.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  if (!agent) return null;
 
   const styles = {
     backdrop: {
@@ -139,6 +178,7 @@ export function AgentDetailsDrawer({ sessionId, onClose }: Props) {
         aria-hidden="true"
       />
       <div
+        ref={panelRef}
         style={styles.panel}
         role="dialog"
         aria-modal="true"
