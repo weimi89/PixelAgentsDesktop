@@ -8,7 +8,6 @@ sidecar/node_modules/
 .env.local
 
 # IDE / tooling caches
-.serena/
 .vscode/
 .idea/
 
@@ -16,8 +15,15 @@ sidecar/node_modules/
 coverage/
 
 # 檔案搬移備份（依 CLAUDE.md 規則保留而不刪除）
-backups/
 
 # Tauri 自動生成的 schema（每次 tauri-build 會更新；不該進版控）
 src-tauri/gen/schemas/
 
+
+# AI 協作文件與規則一律放 ../PixelAgentsBrain，專案內只有符號連結，不入版控、不部署
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+.claude
+.serena
+backups/
